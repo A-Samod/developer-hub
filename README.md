@@ -26,10 +26,12 @@ Developer Hub replaces scattered notes in chat threads and scratch files with a 
 
 | Area | Purpose |
 |---|---|
-| **Knowledge Base** | Long-form Markdown docs (runbooks, troubleshooting, API notes) |
-| **Code Snippets** | Short, copyable commands and code samples (e.g. daily git commands) |
 | **Task Manager** | One list for office work: development, BA support, daily tasks |
+| **Knowledge Base** | Long-form Markdown docs (runbooks, troubleshooting, API notes) |
+| **Code Snippets** | Short, copyable commands and code samples |
 | **Search** | Header search across notes, snippets, and tasks |
+
+Sidebar order: **Dashboard → Task Manager → Knowledge Base → Code Snippets → Settings**.
 
 ---
 
@@ -37,70 +39,74 @@ Developer Hub replaces scattered notes in chat threads and scratch files with a 
 
 ### Dashboard (`/`)
 
-Your daily landing page (blocks can be toggled in Settings).
+Daily landing page.
 
-- Quick add: task for today / tomorrow, new note, new snippet
-- **Pinned / favorites** — starred notes, snippets, and tasks
-- **Today** — due today or overdue (non-archived)
-- **Overdue** — overdue active tasks
-- **Recent notes** — last updated items
+- Quick actions: new note, new snippet, open Task Manager
+- **Recent notes** — last five updated notes
+- **Tasks needing attention** — in progress, due today, or overdue (not archived)
+
+### Task Manager (`/tasks`)
+
+Single work list for development, BA support, ops, and daily office tasks.
+
+- Fields: title, Markdown description, category, status, priority, due date
+- Statuses: Todo, In progress, Blocked, Done, Cancelled
+- Priorities: Low, Medium, High, Urgent
+- Quick create on the list; detail page at `/tasks/[id]`
+- Views: **All**, **My day**, **Upcoming**, **In progress**, **Completed**, **By category**
+- Filters: search, category, status, priority, due bucket (overdue / today / upcoming / none), and **calendar due-on date**
+- Custom dropdowns (not native selects) for filters and form fields
+- Client-side **pagination** (default 10 per page; 10 / 20 / 50 / 100)
+- Delete with confirmation banner
+- Completing a task records `completed_at`
 
 ### Knowledge Base (`/notes`)
 
 A personal docs site for technical writing.
 
 - Create and edit Markdown notes (`/notes/new`, `/notes/[id]`)
-- Edit / preview modes with GFM support (headings, lists, tables, code fences)
+- Edit / preview modes with GFM (headings, lists, tables, code fences)
 - Fenced code blocks highlighted with Shiki; one-click copy
 - Organize with **categories**, **tags**, and **favorites**
-- Filter and sort lists (search text, category, favorites, recently updated / title)
-- Explicit **Save** button; browser warns if you leave with unsaved changes
+- Filter and sort (search, category, favorites, recently updated / title)
+- Custom category dropdown; pagination (default 10 per page)
+- Explicit **Save**; unsaved-change and delete **confirmation banners**
 
 ### Code Snippets (`/snippets`)
 
 A searchable library of reusable code.
 
 - Fields: title, description, language, code, category, tags, favorite
-- Languages include JavaScript, TypeScript, SQL, shell, GraphQL, Terraform, Python, JSON
-- Live highlighted preview and **exact** clipboard copy (whitespace preserved)
-- Duplicate a snippet to fork it quickly
-- Filter by text, language, category, and favorites
+- Languages: JavaScript, TypeScript, SQL, Shell, GraphQL, Terraform, Python, JSON (readable labels)
+- Live highlighted preview and **exact** clipboard copy
+- List actions: **Copy code**, **Rename**, **Delete** (row opens editor)
+- Duplicate from the snippet detail form
+- Filters: text, language, category, sort, favorites
+- Custom dropdowns; pagination (default 10 per page)
 
-### Task Manager (`/tasks`)
+### Global search
 
-Single work list for development, BA support, ops, and daily office tasks.
+Search from the **app header** (desktop field + mobile expand); full results on `/search?q=`.
 
-- Fields: title, Markdown description, category, status, priority, due date, optional **effort estimate** (hours + minutes), favorite, archive
-- Checkbox complete on the list; richer status on the detail page
-- Quick add for **Today** / **Tomorrow**; create form with estimate
-- Views: **My day** (default), **Upcoming**, **In progress**, **Completed**, **Archived**, **All**, **By category**
-- Filters: text, category, status, priority, due bucket, **due from / due to** date range
-- Soft-delete via **Archive**; hard delete from archived items
-- Export filtered list as **JSON** or **CSV**
-- Detail page (`/tasks/[id]`) with linked notes and snippets
-- Completing a task records `completed_at`
-
-### Global search (`/search`)
-
-Search from the **app header** (desktop field + mobile icon); results on `/search`.
-
-- Queries notes, snippets, and tasks (archived tasks excluded)
+- Live dropdown results while typing; clear control; open full search page
+- Queries notes, snippets, and tasks (archived tasks excluded from search RPC)
 - PostgreSQL full-text + substring matching
-- Results grouped by type with deep links; query synced to `?q=`
+- Results grouped by type with deep links
 
 ### Settings (`/settings`)
 
-- **Workspace:** default Task Manager view; dashboard block toggles (browser `localStorage`)
-- Categories CRUD (notes, snippets, tasks) + seed defaults
-- Light / dark theme
+- Categories CRUD for notes, snippets, and tasks + seed defaults
+- Light / dark **Appearance** theme (browser preference)
 - Full-hub **Export JSON** backup
+- Confirmation banners for seed and category remove
 
-### Mobile layout
+### Shared UI & UX
 
+- Custom **SelectDropdown** listboxes (mobile-friendly) for filters and many form fields
+- **ConfirmBanner** for destructive or leave-without-save actions
+- Sign out confirmation in the sidebar
 - Responsive shell: permanent sidebar on desktop, hamburger drawer on phones
-- Global search in the mobile header; desktop top search bar
-- Task filters collapse behind a **Filters** control on small screens
-- Touch-friendly checkboxes and overflow menus on task rows
+- Touch-friendly buttons and list actions
 
 ### Authentication & privacy
 
@@ -132,15 +138,17 @@ Search from the **app header** (desktop field + mobile icon); results on `/searc
 
 ```text
 developer-hub/
-├── public/                 # Static assets
+├── public/                 # Static assets (logo, …)
 ├── src/
 │   ├── app/                # Next.js routes (App Router)
 │   │   ├── (auth)/login/   # Sign-in
 │   │   └── (app)/          # Authenticated pages
-│   ├── components/         # UI by feature (notes, tasks, …)
+│   ├── components/         # UI by feature (notes, tasks, snippets, …)
+│   │   └── ui/             # Shared: ConfirmBanner, SelectDropdown, ListPagination
 │   ├── lib/
 │   │   ├── hub/            # Client data layer (HubProvider)
-│   │   └── supabase/       # Browser, server, middleware clients
+│   │   ├── supabase/       # Browser, server, middleware clients
+│   │   └── useListPagination.ts
 │   ├── types/              # Domain + database types
 │   └── middleware.ts       # Session refresh + route protection
 ├── supabase/
@@ -178,8 +186,8 @@ Use the **project URL** and **anon / publishable** key from Supabase → **Proje
 2. Open **SQL Editor**.
 3. (Optional) Run `supabase/reset.sql` only if you need to wipe a failed setup.
 4. Run SQL:
-   - **Fresh database:** run `supabase/migrations/20261011000000_init.sql` (current schema, no todos).
-   - **Existing database** that already ran an older init: also run `supabase/migrations/20261011120000_tasks_redesign.sql` to add task fields, drop `todos`, and refresh search/seeds.
+   - **Fresh database:** run `supabase/migrations/20261011000000_init.sql`.
+   - **Existing database** that already ran an older init: also run `supabase/migrations/20261011120000_tasks_redesign.sql` (task columns, drop `todos`, refresh search/seeds).
 
 This creates tables, RLS policies, search triggers, `search_developer_hub`, and `seed_default_categories`.
 
@@ -211,17 +219,20 @@ Open [http://localhost:3000](http://localhost:3000), sign in, then go to **Setti
 
 ## Database
 
-Schema lives in `supabase/migrations/20261011000000_init.sql`.
+Schema lives in `supabase/migrations/`. Start from `20261011000000_init.sql`; apply `20261011120000_tasks_redesign.sql` when upgrading an older DB.
 
 | Object | Role |
 |---|---|
 | Tables | `categories`, `notes`, `snippets`, `tasks`, `task_resources` |
+| Task extras | `estimate_minutes`, `archived_at`, `is_favorite` (columns exist; archive/estimate UI is minimal) |
 | RLS | Every row is scoped to `auth.uid()` |
 | Search triggers | Keep `search_vector` updated on insert/update |
-| `search_developer_hub(query)` | Unified search RPC used by the Search page |
+| `search_developer_hub(query)` | Unified search RPC used by header search and `/search` |
 | `seed_default_categories()` | Inserts default categories if the user has none |
 
 `supabase/reset.sql` drops these objects. Use it only when intentionally recreating the schema (it deletes data).
+
+**Data loading:** Hub loads the user’s notes, snippets, and tasks into the client; list pages filter/sort in memory and paginate for display.
 
 ---
 
