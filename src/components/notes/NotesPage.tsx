@@ -3,8 +3,12 @@
 import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { TagChip } from '@/components/tasks/StatusBadge';
+import ConfirmBanner from '@/components/ui/ConfirmBanner';
+import ListPagination from '@/components/ui/ListPagination';
+import SelectDropdown from '@/components/ui/SelectDropdown';
 import { formatDateTime } from '@/lib/dates';
 import { useHub } from '@/lib/hub/HubProvider';
+import { useListPagination } from '@/lib/useListPagination';
 
 type SortKey = 'updated' | 'title';
 
@@ -15,6 +19,7 @@ export default function NotesPage() {
   const [categoryId, setCategoryId] = useState('');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [sort, setSort] = useState<SortKey>('updated');
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const notes = useMemo(() => {
     let items = [...hub.state.notes];
@@ -34,6 +39,19 @@ export default function NotesPage() {
     );
     return items;
   }, [hub.state.notes, query, categoryId, favoritesOnly, sort]);
+
+  const filterKey = `${query}|${categoryId}|${favoritesOnly}|${sort}`;
+  const {
+    pageSize,
+    setPageSize,
+    currentPage,
+    setPage,
+    totalPages,
+    pageStart,
+    pageEnd,
+    pagedItems: pagedNotes,
+    total,
+  } = useListPagination(notes, filterKey);
 
   if (hub.loading) {
     return <p className="text-sm text-[var(--color-muted)]">Loading notes…</p>;
@@ -60,26 +78,24 @@ export default function NotesPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <select
-          className="input"
+        <SelectDropdown
+          aria-label="Category"
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-        >
-          <option value="">All categories</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input"
+          onChange={setCategoryId}
+          options={[
+            { value: '', label: 'All categories' },
+            ...categories.map((c) => ({ value: c.id, label: c.name, color: c.color })),
+          ]}
+        />
+        <SelectDropdown
+          aria-label="Sort"
           value={sort}
-          onChange={(e) => setSort(e.target.value as SortKey)}
-        >
-          <option value="updated">Recently updated</option>
-          <option value="title">Title A–Z</option>
-        </select>
+          onChange={(v) => setSort(v as SortKey)}
+          options={[
+            { value: 'updated', label: 'Recently updated' },
+            { value: 'title', label: 'Title A–Z' },
+          ]}
+        />
         <label className="flex min-h-10 items-center gap-2 text-sm">
           <input
             type="checkbox"
@@ -89,6 +105,20 @@ export default function NotesPage() {
           Favorites only
         </label>
       </div>
+
+      {deleteId && (
+        <ConfirmBanner
+          danger
+          title="Delete this note?"
+          message="This permanently removes the note. This cannot be undone."
+          confirmLabel="Delete note"
+          onConfirm={async () => {
+            await hub.deleteNote(deleteId);
+            setDeleteId(null);
+          }}
+          onCancel={() => setDeleteId(null)}
+        />
+      )}
 
       {notes.length === 0 ? (
         <div className="panel px-5 py-10 text-center">
@@ -101,46 +131,57 @@ export default function NotesPage() {
           </Link>
         </div>
       ) : (
-        <ul className="panel divide-y divide-[var(--color-border)]">
-          {notes.map((note) => {
-            const cat = categories.find((c) => c.id === note.category_id);
-            return (
-              <li key={note.id} className="list-row">
-                <Link href={`/notes/${note.id}`} className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{note.title}</span>
-                    {note.is_favorite && (
-                      <span className="text-xs text-[var(--color-favorite)]">Favorite</span>
-                    )}
+        <>
+          <ul className="panel divide-y divide-[var(--color-border)]">
+            {pagedNotes.map((note) => {
+              const cat = categories.find((c) => c.id === note.category_id);
+              return (
+                <li key={note.id} className="list-row">
+                  <Link href={`/notes/${note.id}`} className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="font-medium">{note.title}</span>
+                      {note.is_favorite && (
+                        <span className="text-xs text-[var(--color-favorite)]">Favorite</span>
+                      )}
+                    </div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted)]">
+                      {cat && (
+                        <span style={{ color: cat.color }} className="font-medium">
+                          {cat.name}
+                        </span>
+                      )}
+                      <span>Updated {formatDateTime(note.updated_at)}</span>
+                      {note.tags.slice(0, 3).map((t) => (
+                        <TagChip key={t} tag={t} />
+                      ))}
+                      {note.tags.length > 3 && <span>+{note.tags.length - 3}</span>}
+                    </div>
+                  </Link>
+                  <div className="list-actions">
+                    <button
+                      type="button"
+                      className="btn-danger w-full sm:w-auto"
+                      onClick={() => setDeleteId(note.id)}
+                    >
+                      Delete
+                    </button>
                   </div>
-                  <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted)]">
-                    {cat && (
-                      <span style={{ color: cat.color }} className="font-medium">
-                        {cat.name}
-                      </span>
-                    )}
-                    <span>Updated {formatDateTime(note.updated_at)}</span>
-                    {note.tags.slice(0, 3).map((t) => (
-                      <TagChip key={t} tag={t} />
-                    ))}
-                    {note.tags.length > 3 && <span>+{note.tags.length - 3}</span>}
-                  </div>
-                </Link>
-                <div className="list-actions">
-                  <button
-                    type="button"
-                    className="btn-danger w-full sm:w-auto"
-                    onClick={async () => {
-                      if (window.confirm('Delete this note?')) await hub.deleteNote(note.id);
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+          <ListPagination
+            pageStart={pageStart}
+            pageEnd={pageEnd}
+            total={total}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            perPageLabel="Notes per page"
+          />
+        </>
       )}
     </div>
   );

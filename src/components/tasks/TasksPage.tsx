@@ -4,6 +4,9 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import { PriorityBadge, StatusBadge } from '@/components/tasks/StatusBadge';
+import ConfirmBanner from '@/components/ui/ConfirmBanner';
+import ListPagination from '@/components/ui/ListPagination';
+import SelectDropdown from '@/components/ui/SelectDropdown';
 import {
   formatDate,
   isDueToday,
@@ -13,8 +16,14 @@ import {
   todayDate,
 } from '@/lib/dates';
 import { useHub } from '@/lib/hub/HubProvider';
+import { useListPagination } from '@/lib/useListPagination';
 import type { Priority, TaskStatus } from '@/types/models';
-import { PRIORITIES, TASK_STATUSES } from '@/types/models';
+import {
+  formatPriority,
+  formatTaskStatus,
+  PRIORITIES,
+  TASK_STATUSES,
+} from '@/types/models';
 
 type ViewKey = 'all' | 'my_day' | 'upcoming' | 'in_progress' | 'completed' | 'by_category';
 type DueBucket = 'all' | 'overdue' | 'today' | 'upcoming' | 'none';
@@ -29,12 +38,14 @@ export default function TasksPage() {
   const [status, setStatus] = useState('');
   const [priority, setPriority] = useState('');
   const [dueBucket, setDueBucket] = useState<DueBucket>('all');
+  const [dueOn, setDueOn] = useState('');
   const [showCreate, setShowCreate] = useState(false);
   const [newTitle, setNewTitle] = useState('');
   const [newCategory, setNewCategory] = useState('');
   const [newPriority, setNewPriority] = useState<Priority>('medium');
   const [newStatus, setNewStatus] = useState<TaskStatus>('todo');
   const [newDue, setNewDue] = useState('');
+  const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const tasks = useMemo(() => {
     let items = [...hub.state.tasks];
@@ -78,11 +89,15 @@ export default function TasksPage() {
     }
     if (status) items = items.filter((t) => t.status === status);
     if (priority) items = items.filter((t) => t.priority === priority);
-    if (dueBucket === 'overdue')
-      items = items.filter((t) => isOverdue(t.due_date, t.status === 'done'));
-    if (dueBucket === 'today') items = items.filter((t) => isDueToday(t.due_date));
-    if (dueBucket === 'upcoming') items = items.filter((t) => isUpcoming(t.due_date));
-    if (dueBucket === 'none') items = items.filter((t) => !t.due_date);
+    if (dueOn) {
+      items = items.filter((t) => t.due_date === dueOn);
+    } else {
+      if (dueBucket === 'overdue')
+        items = items.filter((t) => isOverdue(t.due_date, t.status === 'done'));
+      if (dueBucket === 'today') items = items.filter((t) => isDueToday(t.due_date));
+      if (dueBucket === 'upcoming') items = items.filter((t) => isUpcoming(t.due_date));
+      if (dueBucket === 'none') items = items.filter((t) => !t.due_date);
+    }
 
     items.sort((a, b) => {
       const aOver = isOverdue(a.due_date, a.status === 'done') ? 0 : 1;
@@ -96,7 +111,20 @@ export default function TasksPage() {
     });
 
     return items;
-  }, [hub.state.tasks, view, query, categoryId, status, priority, dueBucket]);
+  }, [hub.state.tasks, view, query, categoryId, status, priority, dueBucket, dueOn]);
+
+  const filterKey = `${view}|${query}|${categoryId}|${status}|${priority}|${dueBucket}|${dueOn}`;
+  const {
+    pageSize,
+    setPageSize,
+    currentPage,
+    setPage,
+    totalPages,
+    pageStart,
+    pageEnd,
+    pagedItems: pagedTasks,
+    total,
+  } = useListPagination(tasks, filterKey);
 
   async function create() {
     if (!newTitle.trim()) return;
@@ -107,6 +135,9 @@ export default function TasksPage() {
       status: newStatus,
       priority: newPriority,
       due_date: newDue || null,
+      estimate_minutes: null,
+      archived_at: null,
+      is_favorite: false,
     });
     router.push(`/tasks/${task.id}`);
   }
@@ -151,39 +182,34 @@ export default function TasksPage() {
             onChange={(e) => setNewTitle(e.target.value)}
           />
           <div className="grid gap-3 md:grid-cols-4">
-            <select
-              className="input"
+            <SelectDropdown
+              aria-label="Category"
               value={newCategory || categories[0]?.id || ''}
-              onChange={(e) => setNewCategory(e.target.value)}
-            >
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
-            <select
-              className="input"
+              onChange={setNewCategory}
+              options={categories.map((c) => ({
+                value: c.id,
+                label: c.name,
+                color: c.color,
+              }))}
+            />
+            <SelectDropdown
+              aria-label="Status"
               value={newStatus}
-              onChange={(e) => setNewStatus(e.target.value as TaskStatus)}
-            >
-              {TASK_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
-            <select
-              className="input"
+              onChange={(v) => setNewStatus(v as TaskStatus)}
+              options={TASK_STATUSES.map((s) => ({
+                value: s,
+                label: formatTaskStatus(s),
+              }))}
+            />
+            <SelectDropdown
+              aria-label="Priority"
               value={newPriority}
-              onChange={(e) => setNewPriority(e.target.value as Priority)}
-            >
-              {PRIORITIES.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setNewPriority(v as Priority)}
+              options={PRIORITIES.map((p) => ({
+                value: p,
+                label: formatPriority(p),
+              }))}
+            />
             <input
               type="date"
               className="input"
@@ -193,7 +219,7 @@ export default function TasksPage() {
             />
           </div>
           <div className="flex flex-col gap-2 sm:flex-row">
-            <button type="button" className="btn-primary" onClick={create}>
+            <button type="button" className="btn-primary" onClick={() => void create()}>
               Create
             </button>
             <button type="button" className="btn-secondary" onClick={() => setShowCreate(false)}>
@@ -223,95 +249,140 @@ export default function TasksPage() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
-        <select
-          className="input"
+        <SelectDropdown
+          aria-label="Category"
           value={categoryId}
-          onChange={(e) => setCategoryId(e.target.value)}
-        >
-          <option value="">All categories</option>
-          {categories.map((c) => (
-            <option key={c.id} value={c.id}>
-              {c.name}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input"
+          onChange={setCategoryId}
+          options={[
+            { value: '', label: 'All categories' },
+            ...categories.map((c) => ({ value: c.id, label: c.name, color: c.color })),
+          ]}
+        />
+        <SelectDropdown
+          aria-label="Status"
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
-        >
-          <option value="">All statuses</option>
-          {TASK_STATUSES.map((s) => (
-            <option key={s} value={s}>
-              {s}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input"
+          onChange={setStatus}
+          options={[
+            { value: '', label: 'All statuses' },
+            ...TASK_STATUSES.map((s) => ({ value: s, label: formatTaskStatus(s) })),
+          ]}
+        />
+        <SelectDropdown
+          aria-label="Priority"
           value={priority}
-          onChange={(e) => setPriority(e.target.value)}
-        >
-          <option value="">All priorities</option>
-          {PRIORITIES.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-        <select
-          className="input"
+          onChange={setPriority}
+          options={[
+            { value: '', label: 'All priorities' },
+            ...PRIORITIES.map((p) => ({ value: p, label: formatPriority(p) })),
+          ]}
+        />
+        <SelectDropdown
+          aria-label="Due date"
           value={dueBucket}
-          onChange={(e) => setDueBucket(e.target.value as DueBucket)}
-        >
-          <option value="all">Any due date</option>
-          <option value="overdue">Overdue</option>
-          <option value="today">Today</option>
-          <option value="upcoming">Upcoming</option>
-          <option value="none">No due date</option>
-        </select>
+          onChange={(v) => {
+            setDueOn('');
+            setDueBucket(v as DueBucket);
+          }}
+          options={[
+            { value: 'all', label: 'Any due date' },
+            { value: 'overdue', label: 'Overdue' },
+            { value: 'today', label: 'Today' },
+            { value: 'upcoming', label: 'Upcoming' },
+            { value: 'none', label: 'No due date' },
+          ]}
+        />
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          <input
+            type="date"
+            className="input flex-1 sm:flex-none"
+            aria-label="Due on date"
+            value={dueOn}
+            onChange={(e) => {
+              const value = e.target.value;
+              setDueOn(value);
+              if (value) setDueBucket('all');
+            }}
+          />
+          {dueOn && (
+            <button
+              type="button"
+              className="btn-secondary shrink-0"
+              onClick={() => setDueOn('')}
+            >
+              Clear
+            </button>
+          )}
+        </div>
       </div>
+
+      {deleteId && (
+        <ConfirmBanner
+          danger
+          title="Delete this task?"
+          message="This permanently removes the task. This cannot be undone."
+          confirmLabel="Delete task"
+          onConfirm={async () => {
+            await hub.deleteTask(deleteId);
+            setDeleteId(null);
+          }}
+          onCancel={() => setDeleteId(null)}
+        />
+      )}
 
       {tasks.length === 0 ? (
         <div className="panel px-5 py-10 text-center text-sm text-[var(--color-muted)]">
           No tasks match.
         </div>
       ) : (
-        <ul className="panel divide-y divide-[var(--color-border)]">
-          {tasks.map((task) => {
-            const cat = categories.find((c) => c.id === task.category_id);
-            const overdue = isOverdue(task.due_date, task.status === 'done');
-            return (
-              <li key={task.id} className="list-row">
-                <Link href={`/tasks/${task.id}`} className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className={`font-medium ${overdue ? 'text-[var(--color-danger)]' : ''}`}>
-                      {task.title}
-                    </span>
-                    <StatusBadge status={task.status} />
-                    <PriorityBadge priority={task.priority} />
+        <>
+          <ul className="panel divide-y divide-[var(--color-border)]">
+            {pagedTasks.map((task) => {
+              const cat = categories.find((c) => c.id === task.category_id);
+              const overdue = isOverdue(task.due_date, task.status === 'done');
+              return (
+                <li key={task.id} className="list-row">
+                  <Link href={`/tasks/${task.id}`} className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span
+                        className={`font-medium ${overdue ? 'text-[var(--color-danger)]' : ''}`}
+                      >
+                        {task.title}
+                      </span>
+                      <StatusBadge status={task.status} />
+                      <PriorityBadge priority={task.priority} />
+                    </div>
+                    <div className="mt-1 flex flex-wrap gap-2 text-xs text-[var(--color-muted)]">
+                      {cat && <span style={{ color: cat.color }}>{cat.name}</span>}
+                      <span>Due {formatDate(task.due_date)}</span>
+                      {overdue && <span className="text-[var(--color-danger)]">Overdue</span>}
+                    </div>
+                  </Link>
+                  <div className="list-actions">
+                    <button
+                      type="button"
+                      className="btn-danger w-full sm:w-auto"
+                      onClick={() => setDeleteId(task.id)}
+                    >
+                      Delete
+                    </button>
                   </div>
-                  <div className="mt-1 flex flex-wrap gap-2 text-xs text-[var(--color-muted)]">
-                    {cat && <span style={{ color: cat.color }}>{cat.name}</span>}
-                    <span>Due {formatDate(task.due_date)}</span>
-                    {overdue && <span className="text-[var(--color-danger)]">Overdue</span>}
-                  </div>
-                </Link>
-                <div className="list-actions">
-                  <button
-                    type="button"
-                    className="btn-danger w-full sm:w-auto"
-                    onClick={async () => {
-                      if (window.confirm('Delete this task?')) await hub.deleteTask(task.id);
-                    }}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </li>
-            );
-          })}
-        </ul>
+                </li>
+              );
+            })}
+          </ul>
+
+          <ListPagination
+            pageStart={pageStart}
+            pageEnd={pageEnd}
+            total={total}
+            pageSize={pageSize}
+            onPageSizeChange={setPageSize}
+            currentPage={currentPage}
+            totalPages={totalPages}
+            onPageChange={setPage}
+            perPageLabel="Tasks per page"
+          />
+        </>
       )}
     </div>
   );

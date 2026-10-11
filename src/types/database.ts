@@ -113,42 +113,6 @@ export type Database = {
         };
         Relationships: [];
       };
-      todos: {
-        Row: {
-          id: string;
-          user_id: string;
-          title: string;
-          notes: string;
-          is_completed: boolean;
-          priority: Priority;
-          due_date: string | null;
-          created_at: string;
-          updated_at: string;
-        };
-        Insert: {
-          id?: string;
-          user_id: string;
-          title: string;
-          notes?: string;
-          is_completed?: boolean;
-          priority?: Priority;
-          due_date?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Update: {
-          id?: string;
-          user_id?: string;
-          title?: string;
-          notes?: string;
-          is_completed?: boolean;
-          priority?: Priority;
-          due_date?: string | null;
-          created_at?: string;
-          updated_at?: string;
-        };
-        Relationships: [];
-      };
       tasks: {
         Row: {
           id: string;
@@ -159,6 +123,9 @@ export type Database = {
           status: TaskStatus;
           priority: Priority;
           due_date: string | null;
+          estimate_minutes: number | null;
+          archived_at: string | null;
+          is_favorite: boolean;
           created_at: string;
           updated_at: string;
           completed_at: string | null;
@@ -172,6 +139,9 @@ export type Database = {
           status?: TaskStatus;
           priority?: Priority;
           due_date?: string | null;
+          estimate_minutes?: number | null;
+          archived_at?: string | null;
+          is_favorite?: boolean;
           created_at?: string;
           updated_at?: string;
           completed_at?: string | null;
@@ -185,6 +155,9 @@ export type Database = {
           status?: TaskStatus;
           priority?: Priority;
           due_date?: string | null;
+          estimate_minutes?: number | null;
+          archived_at?: string | null;
+          is_favorite?: boolean;
           created_at?: string;
           updated_at?: string;
           completed_at?: string | null;

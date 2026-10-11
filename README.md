@@ -1,6 +1,6 @@
 # Developer Hub
 
-A private, single-user productivity app for developers. Keep technical notes, reusable code snippets, quick to-dos, and structured development tasks in one place — with unified search and secure cloud sync.
+A private, single-user productivity app for developers. Keep technical notes, reusable code snippets, and structured work tasks in one place — with unified search and secure cloud sync.
 
 Built with **Next.js** and **Supabase**. Designed for personal use: one account, your data only, no custom backend server.
 
@@ -27,10 +27,9 @@ Developer Hub replaces scattered notes in chat threads and scratch files with a 
 | Area | Purpose |
 |---|---|
 | **Knowledge Base** | Long-form Markdown docs (runbooks, troubleshooting, API notes) |
-| **Code Snippets** | Short, copyable commands and code samples |
-| **To-dos** | Fast capture for small personal tasks |
-| **Task Manager** | Track real development work (bugs, features, deployments, etc.) |
-| **Search** | Find anything across all of the above |
+| **Code Snippets** | Short, copyable commands and code samples (e.g. daily git commands) |
+| **Task Manager** | One list for office work: development, BA support, daily tasks |
+| **Search** | Header search across notes, snippets, and tasks |
 
 ---
 
@@ -38,12 +37,13 @@ Developer Hub replaces scattered notes in chat threads and scratch files with a 
 
 ### Dashboard (`/`)
 
-Your daily landing page.
+Your daily landing page (blocks can be toggled in Settings).
 
-- Quick actions: new note, new snippet, to-dos, tasks, search
+- Quick add: task for today / tomorrow, new note, new snippet
+- **Pinned / favorites** — starred notes, snippets, and tasks
+- **Today** — due today or overdue (non-archived)
+- **Overdue** — overdue active tasks
 - **Recent notes** — last updated items
-- **Today’s to-dos** — due today or overdue
-- **Tasks needing attention** — in progress, due today, or overdue, sorted by urgency
 
 ### Knowledge Base (`/notes`)
 
@@ -66,52 +66,41 @@ A searchable library of reusable code.
 - Duplicate a snippet to fork it quickly
 - Filter by text, language, category, and favorites
 
-### To-dos (`/todos`)
-
-Lightweight task capture — separate from full development tasks.
-
-- Quick-add with title only
-- Mark complete with a checkbox; edit title, priority, due date, and notes inline
-- Filters: all / active / completed, priority, due date (overdue, today, upcoming, none)
-- Sort by created date or due date
-- Overdue items highlighted
-
 ### Task Manager (`/tasks`)
 
-Structured work tracking for real development items.
+Single work list for development, BA support, ops, and daily office tasks.
 
-- Fields: title, Markdown description, category, status, priority, due date
-- Statuses: To do, In progress, Blocked, Done, Cancelled
-- Priorities: Low, Medium, High, Urgent
-- Views: **All**, **My day**, **Upcoming**, **In progress**, **Completed**, **By category**
-- Extra filters: text, category, status, priority, due-date bucket
-- Default sort: overdue first → higher priority → nearest due date
-- Detail page (`/tasks/[id]`) with related **notes** and **snippets** linked as resources
+- Fields: title, Markdown description, category, status, priority, due date, optional **effort estimate** (hours + minutes), favorite, archive
+- Checkbox complete on the list; richer status on the detail page
+- Quick add for **Today** / **Tomorrow**; create form with estimate
+- Views: **My day** (default), **Upcoming**, **In progress**, **Completed**, **Archived**, **All**, **By category**
+- Filters: text, category, status, priority, due bucket, **due from / due to** date range
+- Soft-delete via **Archive**; hard delete from archived items
+- Export filtered list as **JSON** or **CSV**
+- Detail page (`/tasks/[id]`) with linked notes and snippets
 - Completing a task records `completed_at`
 
 ### Global search (`/search`)
 
-One search box across the hub.
+Search from the **app header** (desktop field + mobile icon); results on `/search`.
 
-- Queries notes, snippets, to-dos, and tasks
-- Uses PostgreSQL full-text search on indexed content
-- Also matches substrings (useful for code like `main(input)` or CLI flags)
-- Results grouped by type, with excerpt and deep link to the record
-- Query synced to the URL (`?q=`)
+- Queries notes, snippets, and tasks (archived tasks excluded)
+- PostgreSQL full-text + substring matching
+- Results grouped by type with deep links; query synced to `?q=`
 
 ### Settings (`/settings`)
 
-Account workspace preferences.
-
-- CRUD for categories (scoped to notes, snippets, or tasks)
-- **Seed default categories** for a fresh account
-- Light / dark theme (stored in the browser)
-- **Export JSON** of all hub data for backup
+- **Workspace:** default Task Manager view; dashboard block toggles (browser `localStorage`)
+- Categories CRUD (notes, snippets, tasks) + seed defaults
+- Light / dark theme
+- Full-hub **Export JSON** backup
 
 ### Mobile layout
 
-- Responsive shell: permanent sidebar on desktop, hamburger + slide-out drawer on phones
-- Stacked page headers, full-width filters, and touch-friendly list actions on small screens
+- Responsive shell: permanent sidebar on desktop, hamburger drawer on phones
+- Global search in the mobile header; desktop top search bar
+- Task filters collapse behind a **Filters** control on small screens
+- Touch-friendly checkboxes and overflow menus on task rows
 
 ### Authentication & privacy
 
@@ -188,7 +177,9 @@ Use the **project URL** and **anon / publishable** key from Supabase → **Proje
 1. Create a project at [supabase.com](https://supabase.com).
 2. Open **SQL Editor**.
 3. (Optional) Run `supabase/reset.sql` only if you need to wipe a failed setup.
-4. Select all of `supabase/migrations/20261011000000_init.sql` and **Run**.
+4. Run SQL:
+   - **Fresh database:** run `supabase/migrations/20261011000000_init.sql` (current schema, no todos).
+   - **Existing database** that already ran an older init: also run `supabase/migrations/20261011120000_tasks_redesign.sql` to add task fields, drop `todos`, and refresh search/seeds.
 
 This creates tables, RLS policies, search triggers, `search_developer_hub`, and `seed_default_categories`.
 
@@ -224,7 +215,7 @@ Schema lives in `supabase/migrations/20261011000000_init.sql`.
 
 | Object | Role |
 |---|---|
-| Tables | `categories`, `notes`, `snippets`, `todos`, `tasks`, `task_resources` |
+| Tables | `categories`, `notes`, `snippets`, `tasks`, `task_resources` |
 | RLS | Every row is scoped to `auth.uid()` |
 | Search triggers | Keep `search_vector` updated on insert/update |
 | `search_developer_hub(query)` | Unified search RPC used by the Search page |

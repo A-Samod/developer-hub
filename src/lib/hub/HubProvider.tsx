@@ -16,13 +16,11 @@ import type {
   CategoryEntityType,
   HubState,
   Note,
-  Priority,
   SearchResult,
   Snippet,
   Task,
   TaskResource,
   TaskStatus,
-  Todo,
 } from '@/types/models';
 
 type HubContextValue = {
@@ -62,17 +60,6 @@ type HubContextValue = {
   ) => Promise<Snippet | null>;
   deleteSnippet: (id: string) => Promise<boolean>;
   duplicateSnippet: (id: string) => Promise<Snippet | null>;
-  createTodo: (input: {
-    title: string;
-    notes?: string;
-    priority?: Priority;
-    due_date?: string | null;
-  }) => Promise<Todo>;
-  updateTodo: (
-    id: string,
-    patch: Partial<Omit<Todo, 'id' | 'user_id' | 'created_at'>>,
-  ) => Promise<Todo | null>;
-  deleteTodo: (id: string) => Promise<boolean>;
   getTask: (id: string) => Task | undefined;
   createTask: (
     input: Omit<Task, 'id' | 'user_id' | 'created_at' | 'updated_at' | 'completed_at'> & {
@@ -91,6 +78,8 @@ type HubContextValue = {
   ) => Promise<void>;
   search: (query: string) => Promise<SearchResult[]>;
   exportJson: () => string;
+  exportTasksJson: (tasks?: Task[]) => string;
+  exportTasksCsv: (tasks?: Task[]) => string;
   seedCategoriesIfEmpty: () => Promise<void>;
 };
 
@@ -98,7 +87,6 @@ const emptyState: HubState = {
   categories: [],
   notes: [],
   snippets: [],
-  todos: [],
   tasks: [],
   task_resources: [],
 };
@@ -131,11 +119,10 @@ export function HubProvider({ children }: { children: ReactNode }) {
     }
     setUserId(user.id);
 
-    const [categories, notes, snippets, todos, tasks, task_resources] = await Promise.all([
+    const [categories, notes, snippets, tasks, task_resources] = await Promise.all([
       supabase.from('categories').select('*').order('name'),
       supabase.from('notes').select('*').order('updated_at', { ascending: false }),
       supabase.from('snippets').select('*').order('updated_at', { ascending: false }),
-      supabase.from('todos').select('*').order('created_at', { ascending: false }),
       supabase.from('tasks').select('*').order('updated_at', { ascending: false }),
       supabase.from('task_resources').select('*'),
     ]);
@@ -144,7 +131,6 @@ export function HubProvider({ children }: { children: ReactNode }) {
       categories.error ||
       notes.error ||
       snippets.error ||
-      todos.error ||
       tasks.error ||
       task_resources.error;
     if (firstError) throw firstError;
@@ -153,7 +139,6 @@ export function HubProvider({ children }: { children: ReactNode }) {
       categories: (categories.data ?? []) as Category[],
       notes: (notes.data ?? []) as Note[],
       snippets: (snippets.data ?? []) as Snippet[],
-      todos: (todos.data ?? []) as Todo[],
       tasks: (tasks.data ?? []) as Task[],
       task_resources: (task_resources.data ?? []) as TaskResource[],
     });
@@ -368,48 +353,6 @@ export function HubProvider({ children }: { children: ReactNode }) {
         return snippet;
       },
 
-      async createTodo(input) {
-        const uid = requireUserId(userId);
-        const { data, error: err } = await supabase
-          .from('todos')
-          .insert({
-            user_id: uid,
-            title: input.title.trim(),
-            notes: input.notes ?? '',
-            priority: input.priority ?? 'medium',
-            due_date: input.due_date ?? null,
-            is_completed: false,
-          })
-          .select()
-          .single();
-        if (err) throw err;
-        const todo = data as Todo;
-        setState((s) => ({ ...s, todos: [todo, ...s.todos] }));
-        return todo;
-      },
-      async updateTodo(id, patch) {
-        const { data, error: err } = await supabase
-          .from('todos')
-          .update({ ...patch, updated_at: nowIso() })
-          .eq('id', id)
-          .select()
-          .maybeSingle();
-        if (err) throw err;
-        if (!data) return null;
-        const todo = data as Todo;
-        setState((s) => ({
-          ...s,
-          todos: s.todos.map((t) => (t.id === id ? todo : t)),
-        }));
-        return todo;
-      },
-      async deleteTodo(id) {
-        const { error: err } = await supabase.from('todos').delete().eq('id', id);
-        if (err) throw err;
-        setState((s) => ({ ...s, todos: s.todos.filter((t) => t.id !== id) }));
-        return true;
-      },
-
       getTask(id) {
         return state.tasks.find((t) => t.id === id);
       },
@@ -426,6 +369,9 @@ export function HubProvider({ children }: { children: ReactNode }) {
             status,
             priority: input.priority,
             due_date: input.due_date,
+            estimate_minutes: input.estimate_minutes ?? null,
+            archived_at: input.archived_at ?? null,
+            is_favorite: input.is_favorite ?? false,
             completed_at: status === 'done' ? nowIso() : (input.completed_at ?? null),
           })
           .select()
@@ -521,9 +467,7 @@ export function HubProvider({ children }: { children: ReactNode }) {
               ? `/notes/${row.id}`
               : type === 'snippet'
                 ? `/snippets/${row.id}`
-                : type === 'todo'
-                  ? '/todos'
-                  : `/tasks/${row.id}`;
+                : `/tasks/${row.id}`;
           return {
             id: row.id,
             type,
@@ -539,6 +483,55 @@ export function HubProvider({ children }: { children: ReactNode }) {
 
       exportJson() {
         return JSON.stringify(state, null, 2);
+      },
+
+      exportTasksJson(tasks) {
+        const list = tasks ?? state.tasks;
+        return JSON.stringify(list, null, 2);
+      },
+
+      exportTasksCsv(tasks) {
+        const list = tasks ?? state.tasks;
+        const escape = (v: string | number | boolean | null | undefined) => {
+          const s = v == null ? '' : String(v);
+          if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
+          return s;
+        };
+        const header = [
+          'id',
+          'title',
+          'description',
+          'category_id',
+          'status',
+          'priority',
+          'due_date',
+          'estimate_minutes',
+          'is_favorite',
+          'archived_at',
+          'completed_at',
+          'created_at',
+          'updated_at',
+        ];
+        const rows = list.map((t) =>
+          [
+            t.id,
+            t.title,
+            t.description,
+            t.category_id,
+            t.status,
+            t.priority,
+            t.due_date,
+            t.estimate_minutes,
+            t.is_favorite,
+            t.archived_at,
+            t.completed_at,
+            t.created_at,
+            t.updated_at,
+          ]
+            .map(escape)
+            .join(','),
+        );
+        return [header.join(','), ...rows].join('\n');
       },
     };
   }, [state, loading, error, userId, refresh, seedCategoriesIfEmpty, supabase]);

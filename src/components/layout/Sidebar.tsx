@@ -4,15 +4,14 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useState } from 'react';
 import AppLogo from '@/components/layout/AppLogo';
+import ConfirmBanner from '@/components/ui/ConfirmBanner';
 import { createClient } from '@/lib/supabase/client';
 
 const links = [
   { href: '/', label: 'Dashboard', key: 'dashboard' },
+  { href: '/tasks', label: 'Task Manager', key: 'tasks' },
   { href: '/notes', label: 'Knowledge Base', key: 'notes' },
   { href: '/snippets', label: 'Code Snippets', key: 'snippets' },
-  { href: '/todos', label: 'To-dos', key: 'todos' },
-  { href: '/tasks', label: 'Task Manager', key: 'tasks' },
-  { href: '/search', label: 'Search', key: 'search' },
   { href: '/settings', label: 'Settings', key: 'settings' },
 ];
 
@@ -32,6 +31,7 @@ export default function Sidebar({
 }: Props) {
   const router = useRouter();
   const [email, setEmail] = useState('');
+  const [confirmSignOut, setConfirmSignOut] = useState(false);
 
   useEffect(() => {
     const supabase = createClient();
@@ -43,6 +43,7 @@ export default function Sidebar({
   async function signOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
+    setConfirmSignOut(false);
     onNavigate?.();
     router.push('/login');
     router.refresh();
@@ -93,9 +94,24 @@ export default function Sidebar({
       </nav>
       <div className="border-t border-[var(--color-border)] p-3">
         <div className="mb-2 truncate text-xs text-[var(--color-muted)]">{email}</div>
-        <button type="button" className="btn-secondary w-full min-h-10" onClick={signOut}>
-          Sign out
-        </button>
+        {confirmSignOut ? (
+          <ConfirmBanner
+            compact
+            title="Sign out?"
+            message="You'll need to sign in again to access Developer Hub."
+            confirmLabel="Sign out"
+            onConfirm={() => void signOut()}
+            onCancel={() => setConfirmSignOut(false)}
+          />
+        ) : (
+          <button
+            type="button"
+            className="btn-secondary w-full min-h-10"
+            onClick={() => setConfirmSignOut(true)}
+          >
+            Sign out
+          </button>
+        )}
       </div>
     </aside>
   );

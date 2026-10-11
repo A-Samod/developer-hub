@@ -98,23 +98,23 @@
 
 @layer components {
   .btn {
-    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors;
+    @apply inline-flex cursor-pointer items-center justify-center gap-2 rounded-xl px-3.5 py-2 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)];
   }
 
   .btn-primary {
-    @apply inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors bg-[var(--color-accent)] text-white hover:bg-[#1a5fc4] disabled:cursor-not-allowed disabled:opacity-60 md:min-h-0 md:py-1.5 dark:hover:bg-[#6ba0ff];
+    @apply inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-150 bg-[var(--color-accent)] text-white shadow-sm hover:bg-[#1a5fc4] hover:shadow active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none disabled:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] md:min-h-0 md:py-2 dark:hover:bg-[#6ba0ff];
   }
 
   .btn-secondary {
-    @apply inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors border border-[var(--color-border)] bg-[var(--color-panel)] text-[var(--color-ink)] hover:border-[var(--color-muted)] hover:bg-[var(--color-chip)] disabled:cursor-not-allowed disabled:opacity-60 md:min-h-0 md:py-1.5;
+    @apply inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition-all duration-150 border border-[var(--color-border)] bg-[var(--color-panel)] text-[var(--color-ink)] shadow-sm hover:border-[var(--color-muted)] hover:bg-[var(--color-chip)] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] md:min-h-0 md:py-2;
   }
 
   .btn-danger {
-    @apply inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors border border-[var(--color-danger)] bg-[var(--color-danger-soft)] text-[var(--color-danger)] hover:bg-[#fee2e2] hover:border-[#b91c1c] disabled:cursor-not-allowed disabled:opacity-60 md:min-h-0 md:py-1.5 dark:hover:bg-[#4a2428];
+    @apply inline-flex min-h-10 cursor-pointer items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold transition-all duration-150 border border-transparent bg-[var(--color-danger-soft)] text-[var(--color-danger)] hover:bg-[#fecaca] active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-danger)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-surface)] md:min-h-0 md:py-2 dark:hover:bg-[#4a2428];
   }
 
   .input {
-    @apply w-full rounded-md border border-[var(--color-border)] bg-[var(--color-panel)] px-3 py-2.5 text-sm text-[var(--color-ink)] outline-none focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)] md:py-2;
+    @apply w-full rounded-xl border border-[var(--color-border)] bg-[var(--color-panel)] px-3.5 py-2.5 text-sm text-[var(--color-ink)] outline-none transition-shadow focus:border-[var(--color-accent)] focus:ring-2 focus:ring-[var(--color-accent-soft)] md:py-2;
   }
 
   .page-header {
