@@ -1,37 +1,33 @@
 'use client';
 
 import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import { formatDateTime } from '@/lib/dates';
 import { useHub } from '@/lib/hub/HubProvider';
 import type { SearchResult } from '@/types/models';
 
-const typeOrder = ['note', 'snippet', 'task', 'todo'] as const;
+const typeOrder = ['note', 'snippet', 'task'] as const;
 const typeLabels: Record<(typeof typeOrder)[number], string> = {
   note: 'Notes',
   snippet: 'Snippets',
   task: 'Tasks',
-  todo: 'To-dos',
 };
 
 export default function SearchPage() {
   const hub = useHub();
-  const [query, setQuery] = useState('');
+  const searchParams = useSearchParams();
+  const query = searchParams.get('q') ?? '';
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
   const [error, setError] = useState('');
-
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const q = params.get('q');
-    if (q) setQuery(q);
-  }, []);
 
   useEffect(() => {
     const q = query.trim();
     if (!q) {
       setResults([]);
       setError('');
+      setSearching(false);
       return;
     }
     const handle = window.setTimeout(async () => {
@@ -46,9 +42,8 @@ export default function SearchPage() {
       } finally {
         setSearching(false);
       }
-    }, 250);
+    }, 200);
     return () => window.clearTimeout(handle);
-    // Intentionally only re-run on query changes; hub.search reads latest client/session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [query]);
 
@@ -57,9 +52,10 @@ export default function SearchPage() {
       note: [],
       snippet: [],
       task: [],
-      todo: [],
     };
-    for (const r of results) map[r.type].push(r);
+    for (const r of results) {
+      if (r.type in map) map[r.type].push(r);
+    }
     return map;
   }, [results]);
 
@@ -68,23 +64,9 @@ export default function SearchPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-semibold tracking-tight">Search</h1>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
-          Postgres full-text + substring search across notes, snippets, tasks, and to-dos
+          Use the search bar above. Results update as you type.
         </p>
       </div>
-
-      <input
-        className="input mb-4 text-base"
-        autoFocus
-        placeholder="Try git rebase, CORS, passport, main(input)…"
-        value={query}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          const url = new URL(window.location.href);
-          if (e.target.value.trim()) url.searchParams.set('q', e.target.value);
-          else url.searchParams.delete('q');
-          window.history.replaceState({}, '', url);
-        }}
-      />
 
       {error && (
         <div className="mb-4 rounded-md bg-[var(--color-danger-soft)] px-3 py-2 text-sm text-[var(--color-danger)]">
@@ -94,7 +76,7 @@ export default function SearchPage() {
 
       {!query.trim() && (
         <div className="panel px-5 py-8 text-sm text-[var(--color-muted)]">
-          Enter a phrase to search titles, bodies, tags, and code.
+          Type in the header search to find notes, snippets, and tasks.
         </div>
       )}
 
@@ -104,7 +86,7 @@ export default function SearchPage() {
 
       {query.trim() && !searching && results.length === 0 && !error && (
         <div className="panel px-5 py-8 text-center">
-          <p className="font-medium">No matches</p>
+          <p className="font-medium">No matches for “{query.trim()}”</p>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
             Try a shorter fragment or different keyword.
           </p>

@@ -5,8 +5,10 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import CodeBlock from '@/components/markdown/CodeBlock';
 import CopyCodeButton from '@/components/snippets/CopyCodeButton';
+import ConfirmBanner from '@/components/ui/ConfirmBanner';
+import SelectDropdown from '@/components/ui/SelectDropdown';
 import { useHub } from '@/lib/hub/HubProvider';
-import { SNIPPET_LANGUAGES } from '@/types/models';
+import { formatSnippetLanguage, SNIPPET_LANGUAGES } from '@/types/models';
 
 function parseTags(raw: string): string[] {
   return raw
@@ -31,6 +33,8 @@ export default function SnippetFormPage({ snippetId }: { snippetId?: string }) {
   const [dirty, setDirty] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirm, setConfirm] = useState<'delete' | 'discard' | null>(null);
+  const [formError, setFormError] = useState('');
 
   useEffect(() => {
     if (!existing) return;
@@ -78,9 +82,10 @@ export default function SnippetFormPage({ snippetId }: { snippetId?: string }) {
 
   async function save() {
     if (!title.trim()) {
-      window.alert('Title is required');
+      setFormError('Title is required');
       return;
     }
+    setFormError('');
     setSaving(true);
     try {
       const payload = {
@@ -102,22 +107,21 @@ export default function SnippetFormPage({ snippetId }: { snippetId?: string }) {
         router.replace(`/snippets/${snippet.id}`);
       }
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Save failed');
+      setFormError(e instanceof Error ? e.message : 'Save failed');
     } finally {
       setSaving(false);
     }
   }
 
-  async function remove() {
+  async function removeConfirmed() {
     if (!existing) return;
-    if (!window.confirm('Delete this snippet?')) return;
     await hub.deleteSnippet(existing.id);
     router.push('/snippets');
   }
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div className="page-header">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             {existing ? 'Edit snippet' : 'New snippet'}
@@ -126,22 +130,23 @@ export default function SnippetFormPage({ snippetId }: { snippetId?: string }) {
             Plain-text code editor · whitespace preserved
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link
-            href="/snippets"
-            className="btn-secondary"
-            onClick={(e) => {
-              if (dirty && !window.confirm('Discard unsaved changes?')) e.preventDefault();
+        <div className="list-actions w-full sm:w-auto">
+          <button
+            type="button"
+            className="btn-secondary flex-1 sm:flex-none"
+            onClick={() => {
+              if (dirty) setConfirm('discard');
+              else router.push('/snippets');
             }}
           >
             Back
-          </Link>
+          </button>
           {existing && (
             <>
               <CopyCodeButton code={code} />
               <button
                 type="button"
-                className="btn-secondary"
+                className="btn-secondary flex-1 sm:flex-none"
                 onClick={async () => {
                   const copy = await hub.duplicateSnippet(existing.id);
                   if (copy) router.push(`/snippets/${copy.id}`);
@@ -149,17 +154,55 @@ export default function SnippetFormPage({ snippetId }: { snippetId?: string }) {
               >
                 Duplicate
               </button>
-              <button type="button" className="btn-danger" onClick={remove}>
+              <button
+                type="button"
+                className="btn-danger flex-1 sm:flex-none"
+                onClick={() => setConfirm('delete')}
+              >
                 Delete
               </button>
             </>
           )}
-          <button type="button" className="btn-primary" onClick={save} disabled={saving}>
+          <button
+            type="button"
+            className="btn-primary flex-1 sm:flex-none"
+            onClick={save}
+            disabled={saving}
+          >
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
 
+      {confirm === 'delete' && (
+        <ConfirmBanner
+          danger
+          title="Delete this snippet?"
+          message="This permanently removes the snippet. This cannot be undone."
+          confirmLabel="Delete snippet"
+          onConfirm={() => void removeConfirmed()}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+      {confirm === 'discard' && (
+        <ConfirmBanner
+          title="Discard unsaved changes?"
+          message="You have edits that have not been saved. Leave anyway?"
+          confirmLabel="Discard"
+          onConfirm={() => {
+            setDirty(false);
+            setConfirm(null);
+            router.push('/snippets');
+          }}
+          onCancel={() => setConfirm(null)}
+        />
+      )}
+
+      {formError && (
+        <div className="mb-3 rounded-lg border border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-4 py-3 text-sm text-[var(--color-danger)]">
+          {formError}
+        </div>
+      )}
       {savedMsg && <div className="mb-3 alert-success">{savedMsg}</div>}
 
       <div className="panel grid gap-4 p-4">
@@ -174,17 +217,15 @@ export default function SnippetFormPage({ snippetId }: { snippetId?: string }) {
           </div>
           <div>
             <label className="label">Language</label>
-            <select
-              className="input"
+            <SelectDropdown
+              aria-label="Language"
               value={language}
-              onChange={(e) => markDirty(setLanguage)(e.target.value)}
-            >
-              {SNIPPET_LANGUAGES.map((lang) => (
-                <option key={lang} value={lang}>
-                  {lang}
-                </option>
-              ))}
-            </select>
+              onChange={markDirty(setLanguage)}
+              options={SNIPPET_LANGUAGES.map((lang) => ({
+                value: lang,
+                label: formatSnippetLanguage(lang),
+              }))}
+            />
           </div>
         </div>
         <div>
@@ -198,18 +239,15 @@ export default function SnippetFormPage({ snippetId }: { snippetId?: string }) {
         <div className="grid gap-4 md:grid-cols-3">
           <div>
             <label className="label">Category</label>
-            <select
-              className="input"
+            <SelectDropdown
+              aria-label="Category"
               value={categoryId}
-              onChange={(e) => markDirty(setCategoryId)(e.target.value)}
-            >
-              <option value="">None</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              onChange={markDirty(setCategoryId)}
+              options={[
+                { value: '', label: 'None' },
+                ...categories.map((c) => ({ value: c.id, label: c.name, color: c.color })),
+              ]}
+            />
           </div>
           <div>
             <label className="label">Tags</label>

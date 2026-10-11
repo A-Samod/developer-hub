@@ -5,10 +5,17 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import MarkdownEditor from '@/components/markdown/MarkdownEditor';
 import MarkdownPreview from '@/components/markdown/MarkdownPreview';
+import ConfirmBanner from '@/components/ui/ConfirmBanner';
+import SelectDropdown from '@/components/ui/SelectDropdown';
 import { formatDateTime } from '@/lib/dates';
 import { useHub } from '@/lib/hub/HubProvider';
 import type { Priority, TaskStatus } from '@/types/models';
-import { PRIORITIES, TASK_STATUSES } from '@/types/models';
+import {
+  formatPriority,
+  formatTaskStatus,
+  PRIORITIES,
+  TASK_STATUSES,
+} from '@/types/models';
 
 export default function TaskDetailPage({ taskId }: { taskId: string }) {
   const hub = useHub();
@@ -29,6 +36,8 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
   const [preview, setPreview] = useState(false);
   const [savedMsg, setSavedMsg] = useState('');
   const [saving, setSaving] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [formError, setFormError] = useState('');
 
   useEffect(() => {
     if (!existing) return;
@@ -61,9 +70,10 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
 
   async function save() {
     if (!title.trim()) {
-      window.alert('Title is required');
+      setFormError('Title is required');
       return;
     }
+    setFormError('');
     setSaving(true);
     try {
       await hub.updateTask(taskId, {
@@ -83,14 +93,13 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
       );
       setSavedMsg('Saved');
     } catch (e) {
-      window.alert(e instanceof Error ? e.message : 'Save failed');
+      setFormError(e instanceof Error ? e.message : 'Save failed');
     } finally {
       setSaving(false);
     }
   }
 
-  async function remove() {
-    if (!window.confirm('Delete this task?')) return;
+  async function removeConfirmed() {
     await hub.deleteTask(taskId);
     router.push('/tasks');
   }
@@ -103,7 +112,7 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div className="page-header">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Task details</h1>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
@@ -113,19 +122,43 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
               : ''}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/tasks" className="btn-secondary">
+        <div className="list-actions w-full sm:w-auto">
+          <Link href="/tasks" className="btn-secondary flex-1 sm:flex-none">
             Back
           </Link>
-          <button type="button" className="btn-danger" onClick={remove}>
+          <button
+            type="button"
+            className="btn-danger flex-1 sm:flex-none"
+            onClick={() => setConfirmDelete(true)}
+          >
             Delete
           </button>
-          <button type="button" className="btn-primary" onClick={save} disabled={saving}>
+          <button
+            type="button"
+            className="btn-primary flex-1 sm:flex-none"
+            onClick={() => void save()}
+            disabled={saving}
+          >
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
       </div>
 
+      {confirmDelete && (
+        <ConfirmBanner
+          danger
+          title="Delete this task?"
+          message="This permanently removes the task. This cannot be undone."
+          confirmLabel="Delete task"
+          onConfirm={() => void removeConfirmed()}
+          onCancel={() => setConfirmDelete(false)}
+        />
+      )}
+      {formError && (
+        <div className="mb-3 rounded-lg border border-[var(--color-danger)] bg-[var(--color-danger-soft)] px-4 py-3 text-sm text-[var(--color-danger)]">
+          {formError}
+        </div>
+      )}
       {savedMsg && <div className="mb-3 alert-success">{savedMsg}</div>}
 
       <div className="panel grid gap-4 p-4">
@@ -136,46 +169,39 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
         <div className="grid gap-4 md:grid-cols-4">
           <div>
             <label className="label">Category</label>
-            <select
-              className="input"
+            <SelectDropdown
+              aria-label="Category"
               value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              <option value="">None</option>
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+              onChange={setCategoryId}
+              options={[
+                { value: '', label: 'None' },
+                ...categories.map((c) => ({ value: c.id, label: c.name, color: c.color })),
+              ]}
+            />
           </div>
           <div>
             <label className="label">Status</label>
-            <select
-              className="input"
+            <SelectDropdown
+              aria-label="Status"
               value={status}
-              onChange={(e) => setStatus(e.target.value as TaskStatus)}
-            >
-              {TASK_STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setStatus(v as TaskStatus)}
+              options={TASK_STATUSES.map((s) => ({
+                value: s,
+                label: formatTaskStatus(s),
+              }))}
+            />
           </div>
           <div>
             <label className="label">Priority</label>
-            <select
-              className="input"
+            <SelectDropdown
+              aria-label="Priority"
               value={priority}
-              onChange={(e) => setPriority(e.target.value as Priority)}
-            >
-              {PRIORITIES.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => setPriority(v as Priority)}
+              options={PRIORITIES.map((p) => ({
+                value: p,
+                label: formatPriority(p),
+              }))}
+            />
           </div>
           <div>
             <label className="label">Due date</label>

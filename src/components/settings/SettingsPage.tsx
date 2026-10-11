@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import ThemeToggle from '@/components/layout/ThemeToggle';
+import ConfirmBanner from '@/components/ui/ConfirmBanner';
 import { useHub } from '@/lib/hub/HubProvider';
 import type { CategoryEntityType } from '@/types/models';
 
@@ -15,6 +16,11 @@ export default function SettingsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
   const [message, setMessage] = useState('');
+  const [confirmSeed, setConfirmSeed] = useState(false);
+  const [deleteCategory, setDeleteCategory] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   const grouped = useMemo(() => {
     return entityTypes.map((type) => ({
@@ -49,10 +55,18 @@ export default function SettingsPage() {
     setMessage('Export downloaded');
   }
 
-  async function seedDefaults() {
-    if (!window.confirm('Seed default categories if none exist for your account?')) return;
+  async function seedDefaultsConfirmed() {
     await hub.seedCategoriesIfEmpty();
+    setConfirmSeed(false);
     setMessage('Default categories seeded (skipped if you already have some)');
+  }
+
+  async function removeCategoryConfirmed() {
+    if (!deleteCategory) return;
+    await hub.deleteCategory(deleteCategory.id);
+    setDeleteCategory(null);
+    setEditingId(null);
+    setMessage('Category removed');
   }
 
   if (hub.loading) {
@@ -72,6 +86,27 @@ export default function SettingsPage() {
         <div className="mb-4 rounded-md bg-[var(--color-accent-soft)] px-3 py-2 text-sm text-[var(--color-accent)]">
           {message}
         </div>
+      )}
+
+      {confirmSeed && (
+        <ConfirmBanner
+          title="Seed default categories?"
+          message="Adds starter categories only if your account has none yet."
+          confirmLabel="Seed categories"
+          onConfirm={() => void seedDefaultsConfirmed()}
+          onCancel={() => setConfirmSeed(false)}
+        />
+      )}
+
+      {deleteCategory && (
+        <ConfirmBanner
+          danger
+          title={`Remove “${deleteCategory.name}”?`}
+          message="Items using this category keep their content; the category link is cleared."
+          confirmLabel="Remove category"
+          onConfirm={() => void removeCategoryConfirmed()}
+          onCancel={() => setDeleteCategory(null)}
+        />
       )}
 
       <section className="mb-8">
@@ -123,30 +158,44 @@ export default function SettingsPage() {
                     {editingId === cat.id ? (
                       <>
                         <input
-                          className="input"
+                          className="input min-w-0 flex-1"
                           value={editName}
                           onChange={(e) => setEditName(e.target.value)}
                         />
                         <button
                           type="button"
-                          className="btn-primary"
+                          className="btn-primary shrink-0"
                           onClick={() => void saveRename(cat.id)}
                         >
                           Save
                         </button>
+                        <button
+                          type="button"
+                          className="btn-secondary shrink-0"
+                          onClick={() => setEditingId(null)}
+                        >
+                          Cancel
+                        </button>
                       </>
                     ) : (
                       <>
-                        <span className="flex-1">{cat.name}</span>
+                        <span className="min-w-0 flex-1">{cat.name}</span>
                         <button
                           type="button"
-                          className="btn-secondary"
+                          className="btn-secondary shrink-0"
                           onClick={() => {
                             setEditingId(cat.id);
                             setEditName(cat.name);
                           }}
                         >
                           Rename
+                        </button>
+                        <button
+                          type="button"
+                          className="btn-danger shrink-0"
+                          onClick={() => setDeleteCategory({ id: cat.id, name: cat.name })}
+                        >
+                          Remove
                         </button>
                       </>
                     )}
@@ -164,9 +213,12 @@ export default function SettingsPage() {
         </h2>
         <div className="panel space-y-3 p-4">
           <p className="text-sm text-[var(--color-muted)]">
-            Choose light or dark theme. Preference is saved in this browser.
+            Theme preference is saved in this browser.
           </p>
-          <ThemeToggle />
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium text-[var(--color-ink)]">Appearance</span>
+            <ThemeToggle />
+          </div>
         </div>
       </section>
 
@@ -178,7 +230,7 @@ export default function SettingsPage() {
           <button type="button" className="btn-secondary" onClick={downloadExport}>
             Export JSON
           </button>
-          <button type="button" className="btn-secondary" onClick={() => void seedDefaults()}>
+          <button type="button" className="btn-secondary" onClick={() => setConfirmSeed(true)}>
             Seed default categories
           </button>
         </div>

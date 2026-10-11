@@ -24,23 +24,37 @@ export default function ThemeToggle({ compact = false }: { compact?: boolean }) 
         onClick={() => choose(theme === 'dark' ? 'light' : 'dark')}
         aria-label={theme === 'dark' ? 'Switch to light theme' : 'Switch to dark theme'}
       >
-        {theme === 'dark' ? 'Light mode' : 'Dark mode'}
+        {theme === 'dark' ? 'Light theme' : 'Dark theme'}
       </button>
     );
   }
 
   return (
-    <div className="flex gap-2">
+    <div
+      role="group"
+      aria-label="Theme"
+      className="inline-flex rounded-xl border border-[var(--color-border)] bg-[var(--color-chip)] p-1 shadow-sm"
+    >
       <button
         type="button"
-        className={theme === 'light' ? 'btn-primary' : 'btn-secondary'}
+        className={`min-h-9 rounded-lg px-4 py-1.5 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] ${
+          theme === 'light'
+            ? 'bg-[var(--color-panel)] text-[var(--color-ink)] shadow-sm'
+            : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'
+        }`}
+        aria-pressed={theme === 'light'}
         onClick={() => choose('light')}
       >
         Light
       </button>
       <button
         type="button"
-        className={theme === 'dark' ? 'btn-primary' : 'btn-secondary'}
+        className={`min-h-9 rounded-lg px-4 py-1.5 text-sm font-medium transition-all duration-150 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] ${
+          theme === 'dark'
+            ? 'bg-[var(--color-panel)] text-[var(--color-ink)] shadow-sm'
+            : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'
+        }`}
+        aria-pressed={theme === 'dark'}
         onClick={() => choose('dark')}
       >
         Dark

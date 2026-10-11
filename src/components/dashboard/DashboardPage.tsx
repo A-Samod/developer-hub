@@ -14,22 +14,15 @@ export default function DashboardPage() {
     [state.notes],
   );
 
-  const todayTodos = useMemo(
-    () =>
-      state.todos.filter(
-        (t) => !t.is_completed && (isDueToday(t.due_date) || isOverdue(t.due_date)),
-      ),
-    [state.todos],
-  );
-
   const attentionTasks = useMemo(() => {
     return state.tasks
       .filter(
         (t) =>
-          t.status === 'in_progress' ||
-          (t.status !== 'done' &&
-            t.status !== 'cancelled' &&
-            (isDueToday(t.due_date) || isOverdue(t.due_date))),
+          !t.archived_at &&
+          (t.status === 'in_progress' ||
+            (t.status !== 'done' &&
+              t.status !== 'cancelled' &&
+              (isDueToday(t.due_date) || isOverdue(t.due_date)))),
       )
       .sort((a, b) => {
         const aOver = isOverdue(a.due_date) ? 0 : 1;
@@ -72,14 +65,8 @@ export default function DashboardPage() {
           <Link href="/snippets/new" className="btn-secondary">
             New snippet
           </Link>
-          <Link href="/todos" className="btn-secondary">
-            Add to-do
-          </Link>
           <Link href="/tasks" className="btn-secondary">
             New task
-          </Link>
-          <Link href="/search" className="btn-secondary">
-            Search
           </Link>
         </div>
       </section>
@@ -116,42 +103,6 @@ export default function DashboardPage() {
         </section>
 
         <section>
-          <div className="mb-2 flex items-center justify-between">
-            <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-muted)]">
-              Today&apos;s to-dos
-            </h2>
-            <Link href="/todos" className="text-sm text-[var(--color-accent)]">
-              View all
-            </Link>
-          </div>
-          {todayTodos.length === 0 ? (
-            <div className="panel px-4 py-6 text-sm text-[var(--color-muted)]">
-              Nothing due today or overdue.
-            </div>
-          ) : (
-            <ul className="panel divide-y divide-[var(--color-border)]">
-              {todayTodos.map((todo) => (
-                <li key={todo.id} className="flex items-center justify-between gap-3 px-4 py-3">
-                  <div>
-                    <div
-                      className={`font-medium ${isOverdue(todo.due_date) ? 'text-[var(--color-danger)]' : ''}`}
-                    >
-                      {todo.title}
-                    </div>
-                    <div className="mt-1 flex items-center gap-2 text-xs">
-                      <PriorityBadge priority={todo.priority} />
-                      <span className="text-[var(--color-muted)]">
-                        Due {formatDate(todo.due_date)}
-                      </span>
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </section>
-
-        <section className="lg:col-span-2">
           <div className="mb-2 flex items-center justify-between">
             <h2 className="text-sm font-semibold uppercase tracking-wide text-[var(--color-muted)]">
               Tasks needing attention

@@ -1,6 +1,11 @@
 'use client';
 
-import type { Priority, TaskStatus } from '@/types/models';
+import {
+  formatPriority,
+  formatTaskStatus,
+  type Priority,
+  type TaskStatus,
+} from '@/types/models';
 
 const priorityColors: Record<Priority, string> = {
   low: 'var(--color-priority-low)',
@@ -17,22 +22,14 @@ const statusColors: Record<TaskStatus, string> = {
   cancelled: 'var(--color-status-cancelled)',
 };
 
-const statusLabels: Record<TaskStatus, string> = {
-  todo: 'To do',
-  in_progress: 'In progress',
-  blocked: 'Blocked',
-  done: 'Done',
-  cancelled: 'Cancelled',
-};
-
 export function PriorityBadge({ priority }: { priority: Priority }) {
   const color = priorityColors[priority];
   return (
     <span
-      className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium capitalize"
+      className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
       style={{ background: `color-mix(in srgb, ${color} 16%, white)`, color }}
     >
-      {priority}
+      {formatPriority(priority)}
     </span>
   );
 }
@@ -44,7 +41,7 @@ export function StatusBadge({ status }: { status: TaskStatus }) {
       className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
       style={{ background: `color-mix(in srgb, ${color} 16%, white)`, color }}
     >
-      {statusLabels[status]}
+      {formatTaskStatus(status)}
     </span>
   );
 }

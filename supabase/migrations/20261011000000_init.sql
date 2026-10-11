@@ -61,18 +61,6 @@ create table if not exists public.snippets (
   updated_at timestamptz not null default now()
 );
 
-create table if not exists public.todos (
-  id uuid primary key default gen_random_uuid(),
-  user_id uuid not null references auth.users (id) on delete cascade,
-  title text not null,
-  notes text not null default '',
-  is_completed boolean not null default false,
-  priority public.priority_level not null default 'medium',
-  due_date date,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
 create table if not exists public.tasks (
   id uuid primary key default gen_random_uuid(),
   user_id uuid not null references auth.users (id) on delete cascade,
@@ -82,9 +70,13 @@ create table if not exists public.tasks (
   status public.task_status not null default 'todo',
   priority public.priority_level not null default 'medium',
   due_date date,
+  estimate_minutes integer,
+  archived_at timestamptz,
+  is_favorite boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
-  completed_at timestamptz
+  completed_at timestamptz,
+  constraint tasks_estimate_minutes_check check (estimate_minutes is null or estimate_minutes >= 0)
 );
 
 create table if not exists public.task_resources (
@@ -97,8 +89,8 @@ create table if not exists public.task_resources (
 
 create index if not exists notes_user_updated_idx on public.notes (user_id, updated_at desc);
 create index if not exists snippets_user_updated_idx on public.snippets (user_id, updated_at desc);
-create index if not exists todos_user_created_idx on public.todos (user_id, created_at desc);
 create index if not exists tasks_user_updated_idx on public.tasks (user_id, updated_at desc);
+create index if not exists tasks_user_archived_idx on public.tasks (user_id, archived_at);
 create index if not exists categories_user_entity_idx on public.categories (user_id, entity_type);
 create index if not exists task_resources_task_idx on public.task_resources (task_id);
 
@@ -121,10 +113,6 @@ drop trigger if exists snippets_set_updated_at on public.snippets;
 create trigger snippets_set_updated_at before update on public.snippets
 for each row execute function public.set_updated_at();
 
-drop trigger if exists todos_set_updated_at on public.todos;
-create trigger todos_set_updated_at before update on public.todos
-for each row execute function public.set_updated_at();
-
 drop trigger if exists tasks_set_updated_at on public.tasks;
 create trigger tasks_set_updated_at before update on public.tasks
 for each row execute function public.set_updated_at();
@@ -133,7 +121,6 @@ for each row execute function public.set_updated_at();
 alter table public.categories enable row level security;
 alter table public.notes enable row level security;
 alter table public.snippets enable row level security;
-alter table public.todos enable row level security;
 alter table public.tasks enable row level security;
 alter table public.task_resources enable row level security;
 
@@ -189,24 +176,6 @@ with check ((select auth.uid()) = user_id);
 
 drop policy if exists "snippets_delete_own" on public.snippets;
 create policy "snippets_delete_own" on public.snippets for delete to authenticated
-using ((select auth.uid()) = user_id);
-
--- Todos policies
-drop policy if exists "todos_select_own" on public.todos;
-create policy "todos_select_own" on public.todos for select to authenticated
-using ((select auth.uid()) = user_id);
-
-drop policy if exists "todos_insert_own" on public.todos;
-create policy "todos_insert_own" on public.todos for insert to authenticated
-with check ((select auth.uid()) = user_id);
-
-drop policy if exists "todos_update_own" on public.todos;
-create policy "todos_update_own" on public.todos for update to authenticated
-using ((select auth.uid()) = user_id)
-with check ((select auth.uid()) = user_id);
-
-drop policy if exists "todos_delete_own" on public.todos;
-create policy "todos_delete_own" on public.todos for delete to authenticated
 using ((select auth.uid()) = user_id);
 
 -- Tasks policies
@@ -274,7 +243,6 @@ using (
 -- GENERATED ALWAYS columns are rejected by Postgres with 42P17)
 alter table public.notes add column if not exists search_vector tsvector;
 alter table public.snippets add column if not exists search_vector tsvector;
-alter table public.todos add column if not exists search_vector tsvector;
 alter table public.tasks add column if not exists search_vector tsvector;
 
 create or replace function public.notes_search_vector_update()
@@ -304,18 +272,6 @@ begin
 end;
 $$;
 
-create or replace function public.todos_search_vector_update()
-returns trigger
-language plpgsql
-as $$
-begin
-  new.search_vector :=
-    setweight(to_tsvector('english', coalesce(new.title, '')), 'A') ||
-    setweight(to_tsvector('english', coalesce(new.notes, '')), 'B');
-  return new;
-end;
-$$;
-
 create or replace function public.tasks_search_vector_update()
 returns trigger
 language plpgsql
@@ -338,11 +294,6 @@ create trigger snippets_search_vector_trigger
 before insert or update of title, description, code, tags on public.snippets
 for each row execute function public.snippets_search_vector_update();
 
-drop trigger if exists todos_search_vector_trigger on public.todos;
-create trigger todos_search_vector_trigger
-before insert or update of title, notes on public.todos
-for each row execute function public.todos_search_vector_update();
-
 drop trigger if exists tasks_search_vector_trigger on public.tasks;
 create trigger tasks_search_vector_trigger
 before insert or update of title, description on public.tasks
@@ -350,7 +301,6 @@ for each row execute function public.tasks_search_vector_update();
 
 create index if not exists notes_search_idx on public.notes using gin (search_vector);
 create index if not exists snippets_search_idx on public.snippets using gin (search_vector);
-create index if not exists todos_search_idx on public.todos using gin (search_vector);
 create index if not exists tasks_search_idx on public.tasks using gin (search_vector);
 
 -- Unified search RPC (FTS + substring for code-like queries)
@@ -414,23 +364,6 @@ as $$
 
   union all
 
-  select t.id, 'todo'::text, t.title,
-    left(t.notes, 160),
-    null::text,
-    null::text[],
-    t.updated_at
-  from public.todos t
-  cross join q
-  where t.user_id = auth.uid()
-    and q.raw is not null
-    and (
-      (q.tsq is not null and t.search_vector @@ q.tsq)
-      or lower(t.title) like q.like_pat
-      or lower(t.notes) like q.like_pat
-    )
-
-  union all
-
   select tk.id, 'task'::text, tk.title,
     left(tk.description, 160),
     c.name,
@@ -440,6 +373,7 @@ as $$
   left join public.categories c on c.id = tk.category_id
   cross join q
   where tk.user_id = auth.uid()
+    and tk.archived_at is null
     and q.raw is not null
     and (
       (q.tsq is not null and tk.search_vector @@ q.tsq)
@@ -484,10 +418,13 @@ begin
     (uid, 'SQL', 'snippet', '#7c3aed'),
     (uid, 'Shell', 'snippet', '#334155'),
     (uid, 'Infrastructure', 'snippet', '#0f766e'),
+    (uid, 'Development', 'task', '#2563eb'),
+    (uid, 'BA Support', 'task', '#0891b2'),
+    (uid, 'Ops', 'task', '#c2410c'),
     (uid, 'Bug Fix', 'task', '#dc2626'),
-    (uid, 'Feature', 'task', '#2563eb'),
-    (uid, 'Improvement', 'task', '#0891b2'),
-    (uid, 'Deployment', 'task', '#c2410c'),
+    (uid, 'Feature', 'task', '#1d4ed8'),
+    (uid, 'Improvement', 'task', '#0f766e'),
+    (uid, 'Deployment', 'task', '#ea580c'),
     (uid, 'Testing', 'task', '#16a34a'),
     (uid, 'Research', 'task', '#7c3aed'),
     (uid, 'Documentation', 'task', '#475569'),

@@ -58,3 +58,31 @@ export function priorityRank(priority: string): number {
       return 3;
   }
 }
+
+export function tomorrowDate(): string {
+  return addDays(todayDate(), 1);
+}
+
+export function formatEstimate(minutes: number | null | undefined): string {
+  if (minutes == null || minutes < 0) return '—';
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+export function estimateToParts(minutes: number | null | undefined): {
+  hours: number;
+  minutes: number;
+} {
+  if (minutes == null || minutes < 0) return { hours: 0, minutes: 0 };
+  return { hours: Math.floor(minutes / 60), minutes: minutes % 60 };
+}
+
+export function partsToEstimate(hours: number, minutes: number): number | null {
+  const h = Number.isFinite(hours) ? Math.max(0, Math.floor(hours)) : 0;
+  const m = Number.isFinite(minutes) ? Math.max(0, Math.floor(minutes)) : 0;
+  const total = h * 60 + m;
+  return total > 0 ? total : null;
+}
