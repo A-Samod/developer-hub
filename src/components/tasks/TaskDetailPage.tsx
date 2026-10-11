@@ -103,7 +103,7 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div className="page-header">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Task details</h1>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
@@ -113,14 +113,19 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
               : ''}
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
-          <Link href="/tasks" className="btn-secondary">
+        <div className="list-actions w-full sm:w-auto">
+          <Link href="/tasks" className="btn-secondary flex-1 sm:flex-none">
             Back
           </Link>
-          <button type="button" className="btn-danger" onClick={remove}>
+          <button type="button" className="btn-danger flex-1 sm:flex-none" onClick={remove}>
             Delete
           </button>
-          <button type="button" className="btn-primary" onClick={save} disabled={saving}>
+          <button
+            type="button"
+            className="btn-primary flex-1 sm:flex-none"
+            onClick={save}
+            disabled={saving}
+          >
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>

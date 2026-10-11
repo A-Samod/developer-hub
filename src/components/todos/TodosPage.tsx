@@ -83,21 +83,21 @@ export default function TodosPage() {
         <p className="mt-1 text-sm text-[var(--color-muted)]">Quick capture — title only to add</p>
       </div>
 
-      <form onSubmit={quickAdd} className="panel mb-4 flex gap-2 p-3">
+      <form onSubmit={quickAdd} className="panel mb-4 flex flex-col gap-2 p-3 sm:flex-row">
         <input
           className="input"
           placeholder="Add a to-do…"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
         />
-        <button type="submit" className="btn-primary shrink-0">
+        <button type="submit" className="btn-primary shrink-0 sm:w-auto">
           Add
         </button>
       </form>
 
-      <div className="panel mb-4 flex flex-wrap gap-3 p-3">
+      <div className="filter-bar">
         <select
-          className="input max-w-[140px]"
+          className="input"
           value={completion}
           onChange={(e) => setCompletion(e.target.value as CompletionFilter)}
         >
@@ -106,7 +106,7 @@ export default function TodosPage() {
           <option value="completed">Completed</option>
         </select>
         <select
-          className="input max-w-[140px]"
+          className="input"
           value={priority}
           onChange={(e) => setPriority(e.target.value)}
         >
@@ -118,7 +118,7 @@ export default function TodosPage() {
           ))}
         </select>
         <select
-          className="input max-w-[160px]"
+          className="input"
           value={due}
           onChange={(e) => setDue(e.target.value as DueFilter)}
         >
@@ -129,7 +129,7 @@ export default function TodosPage() {
           <option value="none">No due date</option>
         </select>
         <select
-          className="input max-w-[160px]"
+          className="input"
           value={sort}
           onChange={(e) => setSort(e.target.value as SortKey)}
         >
@@ -150,44 +150,48 @@ export default function TodosPage() {
             return (
               <li key={todo.id} className="px-4 py-3">
                 {!editing ? (
-                  <div className="flex items-start gap-3">
-                    <input
-                      type="checkbox"
-                      className="mt-1"
-                      checked={todo.is_completed}
-                      onChange={(e) =>
-                        void hub.updateTodo(todo.id, { is_completed: e.target.checked })
-                      }
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div
-                        className={`font-medium ${todo.is_completed ? 'text-[var(--color-muted)] line-through' : ''} ${overdue ? 'text-[var(--color-danger)]' : ''}`}
-                      >
-                        {todo.title}
-                      </div>
-                      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted)]">
-                        <PriorityBadge priority={todo.priority} />
-                        <span>Due {formatDate(todo.due_date)}</span>
-                        {overdue && <span className="text-[var(--color-danger)]">Overdue</span>}
-                        {todo.notes && <span>· {todo.notes}</span>}
+                  <div className="flex flex-col gap-3 sm:flex-row sm:items-start">
+                    <div className="flex min-w-0 flex-1 items-start gap-3">
+                      <input
+                        type="checkbox"
+                        className="mt-1 h-4 w-4"
+                        checked={todo.is_completed}
+                        onChange={(e) =>
+                          void hub.updateTodo(todo.id, { is_completed: e.target.checked })
+                        }
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div
+                          className={`font-medium ${todo.is_completed ? 'text-[var(--color-muted)] line-through' : ''} ${overdue ? 'text-[var(--color-danger)]' : ''}`}
+                        >
+                          {todo.title}
+                        </div>
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted)]">
+                          <PriorityBadge priority={todo.priority} />
+                          <span>Due {formatDate(todo.due_date)}</span>
+                          {overdue && <span className="text-[var(--color-danger)]">Overdue</span>}
+                          {todo.notes && <span>· {todo.notes}</span>}
+                        </div>
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className="btn-secondary"
-                      onClick={() => startEdit(todo.id)}
-                    >
-                      Edit
-                    </button>
-                    <button
-                      type="button"
-                      className="btn-danger"
-                      onClick={async () => {
-                        if (window.confirm('Delete this to-do?')) await hub.deleteTodo(todo.id);
-                      }}
-                    >
-                      Delete
-                    </button>
+                    <div className="list-actions">
+                      <button
+                        type="button"
+                        className="btn-secondary flex-1 sm:flex-none"
+                        onClick={() => startEdit(todo.id)}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        type="button"
+                        className="btn-danger flex-1 sm:flex-none"
+                        onClick={async () => {
+                          if (window.confirm('Delete this to-do?')) await hub.deleteTodo(todo.id);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <div className="grid gap-3">

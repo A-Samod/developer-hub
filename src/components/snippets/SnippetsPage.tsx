@@ -47,27 +47,27 @@ export default function SnippetsPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div className="page-header">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Code Snippets</h1>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
             Reusable commands and code with one-click copy
           </p>
         </div>
-        <Link href="/snippets/new" className="btn-primary">
+        <Link href="/snippets/new" className="btn-primary w-full sm:w-auto">
           New snippet
         </Link>
       </div>
 
-      <div className="panel mb-4 flex flex-wrap gap-3 p-3">
+      <div className="filter-bar">
         <input
-          className="input max-w-xs"
+          className="input"
           placeholder="Search snippets…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <select
-          className="input max-w-[160px]"
+          className="input"
           value={language}
           onChange={(e) => setLanguage(e.target.value)}
         >
@@ -79,7 +79,7 @@ export default function SnippetsPage() {
           ))}
         </select>
         <select
-          className="input max-w-[180px]"
+          className="input"
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
         >
@@ -91,14 +91,14 @@ export default function SnippetsPage() {
           ))}
         </select>
         <select
-          className="input max-w-[160px]"
+          className="input"
           value={sort}
           onChange={(e) => setSort(e.target.value as SortKey)}
         >
           <option value="updated">Recently updated</option>
           <option value="title">Title A–Z</option>
         </select>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex min-h-10 items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={favoritesOnly}
@@ -120,10 +120,7 @@ export default function SnippetsPage() {
           {snippets.map((snippet) => {
             const cat = categories.find((c) => c.id === snippet.category_id);
             return (
-              <li
-                key={snippet.id}
-                className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-[var(--color-surface)]"
-              >
+              <li key={snippet.id} className="list-row">
                 <Link href={`/snippets/${snippet.id}`} className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{snippet.title}</span>
@@ -143,10 +140,10 @@ export default function SnippetsPage() {
                     ))}
                   </div>
                 </Link>
-                <div className="flex gap-2">
+                <div className="list-actions">
                   <button
                     type="button"
-                    className="btn-secondary"
+                    className="btn-secondary flex-1 sm:flex-none"
                     onClick={async () => {
                       const copy = await hub.duplicateSnippet(snippet.id);
                       if (copy) router.push(`/snippets/${copy.id}`);
@@ -156,7 +153,7 @@ export default function SnippetsPage() {
                   </button>
                   <button
                     type="button"
-                    className="btn-danger"
+                    className="btn-danger flex-1 sm:flex-none"
                     onClick={async () => {
                       if (window.confirm('Delete this snippet?')) {
                         await hub.deleteSnippet(snippet.id);

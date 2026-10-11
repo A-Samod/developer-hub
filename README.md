@@ -108,6 +108,11 @@ Account workspace preferences.
 - Light / dark theme (stored in the browser)
 - **Export JSON** of all hub data for backup
 
+### Mobile layout
+
+- Responsive shell: permanent sidebar on desktop, hamburger + slide-out drawer on phones
+- Stacked page headers, full-width filters, and touch-friendly list actions on small screens
+
 ### Authentication & privacy
 
 - Email / password sign-in via Supabase Auth (`/login`)

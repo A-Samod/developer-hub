@@ -126,14 +126,18 @@ export default function TasksPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div className="page-header">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Task Manager</h1>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
             Structured development work items
           </p>
         </div>
-        <button type="button" className="btn-primary" onClick={() => setShowCreate((v) => !v)}>
+        <button
+          type="button"
+          className="btn-primary w-full sm:w-auto"
+          onClick={() => setShowCreate((v) => !v)}
+        >
           New task
         </button>
       </div>
@@ -188,7 +192,7 @@ export default function TasksPage() {
               min={todayDate()}
             />
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-col gap-2 sm:flex-row">
             <button type="button" className="btn-primary" onClick={create}>
               Create
             </button>
@@ -199,12 +203,12 @@ export default function TasksPage() {
         </div>
       )}
 
-      <div className="mb-3 flex flex-wrap gap-2">
+      <div className="mb-3 flex gap-2 overflow-x-auto pb-1">
         {views.map((v) => (
           <button
             key={v.key}
             type="button"
-            className={view === v.key ? 'btn-primary' : 'btn-secondary'}
+            className={`shrink-0 ${view === v.key ? 'btn-primary' : 'btn-secondary'}`}
             onClick={() => setView(v.key)}
           >
             {v.label}
@@ -212,15 +216,15 @@ export default function TasksPage() {
         ))}
       </div>
 
-      <div className="panel mb-4 flex flex-wrap gap-3 p-3">
+      <div className="filter-bar">
         <input
-          className="input max-w-xs"
+          className="input"
           placeholder="Search tasks…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <select
-          className="input max-w-[180px]"
+          className="input"
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
         >
@@ -232,7 +236,7 @@ export default function TasksPage() {
           ))}
         </select>
         <select
-          className="input max-w-[160px]"
+          className="input"
           value={status}
           onChange={(e) => setStatus(e.target.value)}
         >
@@ -244,7 +248,7 @@ export default function TasksPage() {
           ))}
         </select>
         <select
-          className="input max-w-[140px]"
+          className="input"
           value={priority}
           onChange={(e) => setPriority(e.target.value)}
         >
@@ -256,7 +260,7 @@ export default function TasksPage() {
           ))}
         </select>
         <select
-          className="input max-w-[160px]"
+          className="input"
           value={dueBucket}
           onChange={(e) => setDueBucket(e.target.value as DueBucket)}
         >
@@ -278,10 +282,7 @@ export default function TasksPage() {
             const cat = categories.find((c) => c.id === task.category_id);
             const overdue = isOverdue(task.due_date, task.status === 'done');
             return (
-              <li
-                key={task.id}
-                className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-[var(--color-surface)]"
-              >
+              <li key={task.id} className="list-row">
                 <Link href={`/tasks/${task.id}`} className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className={`font-medium ${overdue ? 'text-[var(--color-danger)]' : ''}`}>
@@ -296,15 +297,17 @@ export default function TasksPage() {
                     {overdue && <span className="text-[var(--color-danger)]">Overdue</span>}
                   </div>
                 </Link>
-                <button
-                  type="button"
-                  className="btn-danger"
-                  onClick={async () => {
-                    if (window.confirm('Delete this task?')) await hub.deleteTask(task.id);
-                  }}
-                >
-                  Delete
-                </button>
+                <div className="list-actions">
+                  <button
+                    type="button"
+                    className="btn-danger w-full sm:w-auto"
+                    onClick={async () => {
+                      if (window.confirm('Delete this task?')) await hub.deleteTask(task.id);
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </li>
             );
           })}

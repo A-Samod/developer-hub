@@ -41,27 +41,27 @@ export default function NotesPage() {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div className="page-header">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Knowledge Base</h1>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
             Technical notes and Markdown documentation
           </p>
         </div>
-        <Link href="/notes/new" className="btn-primary">
+        <Link href="/notes/new" className="btn-primary w-full sm:w-auto">
           New note
         </Link>
       </div>
 
-      <div className="panel mb-4 flex flex-wrap gap-3 p-3">
+      <div className="filter-bar">
         <input
-          className="input max-w-xs"
+          className="input"
           placeholder="Search notes…"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <select
-          className="input max-w-[200px]"
+          className="input"
           value={categoryId}
           onChange={(e) => setCategoryId(e.target.value)}
         >
@@ -73,14 +73,14 @@ export default function NotesPage() {
           ))}
         </select>
         <select
-          className="input max-w-[160px]"
+          className="input"
           value={sort}
           onChange={(e) => setSort(e.target.value as SortKey)}
         >
           <option value="updated">Recently updated</option>
           <option value="title">Title A–Z</option>
         </select>
-        <label className="flex items-center gap-2 text-sm">
+        <label className="flex min-h-10 items-center gap-2 text-sm">
           <input
             type="checkbox"
             checked={favoritesOnly}
@@ -105,10 +105,7 @@ export default function NotesPage() {
           {notes.map((note) => {
             const cat = categories.find((c) => c.id === note.category_id);
             return (
-              <li
-                key={note.id}
-                className="flex items-start justify-between gap-3 px-4 py-3 hover:bg-[var(--color-surface)]"
-              >
+              <li key={note.id} className="list-row">
                 <Link href={`/notes/${note.id}`} className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{note.title}</span>
@@ -129,15 +126,17 @@ export default function NotesPage() {
                     {note.tags.length > 3 && <span>+{note.tags.length - 3}</span>}
                   </div>
                 </Link>
-                <button
-                  type="button"
-                  className="btn-danger"
-                  onClick={async () => {
-                    if (window.confirm('Delete this note?')) await hub.deleteNote(note.id);
-                  }}
-                >
-                  Delete
-                </button>
+                <div className="list-actions">
+                  <button
+                    type="button"
+                    className="btn-danger w-full sm:w-auto"
+                    onClick={async () => {
+                      if (window.confirm('Delete this note?')) await hub.deleteNote(note.id);
+                    }}
+                  >
+                    Delete
+                  </button>
+                </div>
               </li>
             );
           })}

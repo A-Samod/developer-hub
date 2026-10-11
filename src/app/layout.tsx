@@ -4,6 +4,13 @@ import './globals.css';
 export const metadata: Metadata = {
   title: 'Developer Hub',
   description: 'Private personal hub for notes, snippets, to-dos, and development tasks',
+  icons: {
+    icon: [
+      { url: '/favicon.png', type: 'image/png', sizes: '64x64' },
+      { url: '/logo-mark-128.png', type: 'image/png', sizes: '128x128' },
+    ],
+    apple: [{ url: '/logo-mark-128.png', type: 'image/png' }],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

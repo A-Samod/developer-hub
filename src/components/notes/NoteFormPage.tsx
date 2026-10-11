@@ -111,7 +111,7 @@ export default function NoteFormPage({ noteId }: { noteId?: string }) {
 
   return (
     <div>
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3">
+      <div className="page-header">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             {existing ? 'Edit note' : 'New note'}
@@ -120,10 +120,10 @@ export default function NoteFormPage({ noteId }: { noteId?: string }) {
             Explicit save · unsaved changes are warned on leave
           </p>
         </div>
-        <div className="flex flex-wrap gap-2">
+        <div className="list-actions w-full sm:w-auto">
           <Link
             href="/notes"
-            className="btn-secondary"
+            className="btn-secondary flex-1 sm:flex-none"
             onClick={(e) => {
               if (dirty && !window.confirm('Discard unsaved changes?')) e.preventDefault();
             }}
@@ -131,11 +131,16 @@ export default function NoteFormPage({ noteId }: { noteId?: string }) {
             Back
           </Link>
           {existing && (
-            <button type="button" className="btn-danger" onClick={remove}>
+            <button type="button" className="btn-danger flex-1 sm:flex-none" onClick={remove}>
               Delete
             </button>
           )}
-          <button type="button" className="btn-primary" onClick={save} disabled={saving}>
+          <button
+            type="button"
+            className="btn-primary flex-1 sm:flex-none"
+            onClick={save}
+            disabled={saving}
+          >
             {saving ? 'Saving…' : 'Save'}
           </button>
         </div>
