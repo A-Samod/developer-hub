@@ -27,7 +27,10 @@ export function PriorityBadge({ priority }: { priority: Priority }) {
   return (
     <span
       className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-      style={{ background: `color-mix(in srgb, ${color} 16%, white)`, color }}
+      style={{
+        background: `color-mix(in srgb, ${color} 22%, transparent)`,
+        color,
+      }}
     >
       {formatPriority(priority)}
     </span>
@@ -39,7 +42,10 @@ export function StatusBadge({ status }: { status: TaskStatus }) {
   return (
     <span
       className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-      style={{ background: `color-mix(in srgb, ${color} 16%, white)`, color }}
+      style={{
+        background: `color-mix(in srgb, ${color} 22%, transparent)`,
+        color,
+      }}
     >
       {formatTaskStatus(status)}
     </span>

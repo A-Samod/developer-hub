@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useHub } from '@/lib/hub/HubProvider';
 import type { SearchResult } from '@/types/models';
 
@@ -12,6 +12,20 @@ const TYPE_LABEL: Record<SearchResult['type'], string> = {
   task: 'Task',
 };
 
+const TYPE_ORDER: SearchResult['type'][] = ['note', 'snippet', 'task'];
+const GROUP_LABEL: Record<SearchResult['type'], string> = {
+  note: 'Notes',
+  snippet: 'Snippets',
+  task: 'Tasks',
+};
+
+function shortcutLabel() {
+  if (typeof navigator === 'undefined') return 'Ctrl K';
+  return /Mac|iPhone|iPad|iPod/i.test(navigator.platform || navigator.userAgent)
+    ? '⌘K'
+    : 'Ctrl K';
+}
+
 export default function GlobalSearch({ compact = false }: { compact?: boolean }) {
   const hub = useHub();
   const router = useRouter();
@@ -20,11 +34,26 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
   const onSearchPage = pathname.startsWith('/search');
   const listId = useId();
   const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const [q, setQ] = useState('');
   const [expanded, setExpanded] = useState(false);
   const [panelOpen, setPanelOpen] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [searching, setSearching] = useState(false);
+  const [modKey, setModKey] = useState('Ctrl K');
+
+  useEffect(() => {
+    setModKey(shortcutLabel());
+  }, []);
+
+  useEffect(() => {
+    function onFocusSearch() {
+      if (compact) setExpanded(true);
+      window.setTimeout(() => inputRef.current?.focus(), 0);
+    }
+    window.addEventListener('developer-hub:focus-search', onFocusSearch);
+    return () => window.removeEventListener('developer-hub:focus-search', onFocusSearch);
+  }, [compact]);
 
   useEffect(() => {
     if (onSearchPage) {
@@ -60,7 +89,7 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
     const handle = window.setTimeout(async () => {
       try {
         const rows = await hub.search(trimmed);
-        setResults(rows.slice(0, 8));
+        setResults(rows.slice(0, 12));
       } catch {
         setResults([]);
       } finally {
@@ -83,6 +112,13 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
     return () => document.removeEventListener('mousedown', onPointerDown);
   }, [compact, q]);
 
+  const grouped = useMemo(() => {
+    return TYPE_ORDER.map((type) => ({
+      type,
+      items: results.filter((r) => r.type === type),
+    })).filter((g) => g.items.length > 0);
+  }, [results]);
+
   function openFullSearch() {
     const trimmed = q.trim();
     setPanelOpen(false);
@@ -100,13 +136,14 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
   }
 
   const showInput = !compact || expanded || !!q.trim() || onSearchPage;
+  const showShortcut = !compact && !q;
 
   const dropdown =
     !onSearchPage && panelOpen && q.trim() ? (
       <div
         id={listId}
         role="listbox"
-        className="absolute left-0 right-0 top-full z-50 mt-1 max-h-80 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-lg"
+        className="absolute left-0 right-0 top-full z-50 mt-1 max-h-96 overflow-y-auto rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] shadow-lg"
       >
         {searching && (
           <div className="px-3 py-2 text-sm text-[var(--color-muted)]">Searching…</div>
@@ -115,28 +152,35 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
           <div className="px-3 py-2 text-sm text-[var(--color-muted)]">No matches</div>
         )}
         {!searching &&
-          results.map((item) => (
-            <Link
-              key={`${item.type}-${item.id}`}
-              href={item.href}
-              role="option"
-              className="block border-b border-[var(--color-border)] px-3 py-2 last:border-b-0 hover:bg-[var(--color-surface)]"
-              onClick={() => {
-                setPanelOpen(false);
-                setQ('');
-                if (compact) setExpanded(false);
-              }}
-            >
-              <div className="flex items-center gap-2">
-                <span className="chip">{TYPE_LABEL[item.type]}</span>
-                <span className="truncate text-sm font-medium">{item.title}</span>
+          grouped.map((group) => (
+            <div key={group.type}>
+              <div className="px-3 pt-2 pb-1 text-[10px] font-semibold uppercase tracking-wide text-[var(--color-muted)]">
+                {GROUP_LABEL[group.type]}
               </div>
-              {item.excerpt && (
-                <p className="mt-0.5 line-clamp-1 font-mono text-xs text-[var(--color-muted)]">
-                  {item.excerpt}
-                </p>
-              )}
-            </Link>
+              {group.items.map((item) => (
+                <Link
+                  key={`${item.type}-${item.id}`}
+                  href={item.href}
+                  role="option"
+                  className="block border-b border-[var(--color-border)] px-3 py-2 last:border-b-0 hover:bg-[var(--color-surface)]"
+                  onClick={() => {
+                    setPanelOpen(false);
+                    setQ('');
+                    if (compact) setExpanded(false);
+                  }}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="chip">{TYPE_LABEL[item.type]}</span>
+                    <span className="truncate text-sm font-medium">{item.title}</span>
+                  </div>
+                  {item.excerpt && (
+                    <p className="mt-0.5 line-clamp-1 font-mono text-xs text-[var(--color-muted)]">
+                      {item.excerpt}
+                    </p>
+                  )}
+                </Link>
+              ))}
+            </div>
           ))}
         <button
           type="button"
@@ -165,15 +209,16 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
 
   return (
     <div
-      className={`relative ${compact ? 'ml-auto w-[min(70vw,16rem)]' : 'w-full max-w-xl'}`}
+      className={`relative ${compact ? 'ml-auto w-[min(70vw,16rem)]' : 'w-full max-w-3xl'}`}
       ref={rootRef}
     >
       <div className="relative">
         <input
+          ref={inputRef}
           className={
             compact
               ? 'input min-h-10 w-full py-2 pr-10 text-sm'
-              : 'input w-full pr-10'
+              : `input w-full ${showShortcut ? 'pr-20' : 'pr-10'}`
           }
           placeholder={compact ? 'Search…' : 'Search notes, snippets, tasks…'}
           value={q}
@@ -199,6 +244,11 @@ export default function GlobalSearch({ compact = false }: { compact?: boolean })
           aria-controls={listId}
           autoFocus={compact && expanded}
         />
+        {showShortcut && (
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 rounded-md border border-[var(--color-border)] bg-[var(--color-chip)] px-1.5 py-0.5 text-[11px] font-medium text-[var(--color-muted)]">
+            {modKey}
+          </span>
+        )}
         {q && (
           <button
             type="button"

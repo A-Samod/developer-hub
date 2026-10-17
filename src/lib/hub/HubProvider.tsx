@@ -80,8 +80,14 @@ type HubContextValue = {
   exportJson: () => string;
   exportTasksJson: (tasks?: Task[]) => string;
   exportTasksCsv: (tasks?: Task[]) => string;
+  importJson: (
+    payload: unknown,
+    options: { onDuplicate: 'skip' | 'replace' | 'keep_both' },
+  ) => Promise<{ created: number; skipped: number; replaced: number; errors: string[] }>;
   seedCategoriesIfEmpty: () => Promise<void>;
 };
+
+export type ImportDuplicateStrategy = 'skip' | 'replace' | 'keep_both';
 
 const emptyState: HubState = {
   categories: [],
@@ -219,9 +225,19 @@ export function HubProvider({ children }: { children: ReactNode }) {
       async deleteCategory(id) {
         const { error: err } = await supabase.from('categories').delete().eq('id', id);
         if (err) throw err;
+        // DB sets category_id null via ON DELETE SET NULL — mirror that locally.
         setState((s) => ({
           ...s,
           categories: s.categories.filter((c) => c.id !== id),
+          notes: s.notes.map((n) =>
+            n.category_id === id ? { ...n, category_id: null } : n,
+          ),
+          snippets: s.snippets.map((n) =>
+            n.category_id === id ? { ...n, category_id: null } : n,
+          ),
+          tasks: s.tasks.map((n) =>
+            n.category_id === id ? { ...n, category_id: null } : n,
+          ),
         }));
         return true;
       },
@@ -483,6 +499,228 @@ export function HubProvider({ children }: { children: ReactNode }) {
 
       exportJson() {
         return JSON.stringify(state, null, 2);
+      },
+
+      async importJson(payload, options) {
+        const result = { created: 0, skipped: 0, replaced: 0, errors: [] as string[] };
+        if (!payload || typeof payload !== 'object') {
+          result.errors.push('Invalid JSON: expected an object');
+          return result;
+        }
+        const data = payload as Partial<HubState>;
+        const uid = requireUserId(userId);
+        const catIdMap = new Map<string, string>();
+
+        const categories = Array.isArray(data.categories) ? data.categories : [];
+        for (const raw of categories) {
+          if (!raw || typeof raw !== 'object') continue;
+          const cat = raw as Category;
+          if (!cat.name || !cat.entity_type) {
+            result.errors.push('Skipped category with missing name or type');
+            continue;
+          }
+          const existing = state.categories.find(
+            (c) =>
+              c.entity_type === cat.entity_type &&
+              c.name.toLowerCase() === cat.name.toLowerCase(),
+          );
+          if (existing) {
+            catIdMap.set(cat.id, existing.id);
+            if (options.onDuplicate === 'skip') {
+              result.skipped += 1;
+              continue;
+            }
+            if (options.onDuplicate === 'replace') {
+              await supabase
+                .from('categories')
+                .update({ color: cat.color || existing.color })
+                .eq('id', existing.id);
+              result.replaced += 1;
+              continue;
+            }
+            // keep_both: still map to existing for entity links; count as skip for category
+            result.skipped += 1;
+            continue;
+          }
+          const { data: created, error: err } = await supabase
+            .from('categories')
+            .insert({
+              user_id: uid,
+              name: cat.name,
+              entity_type: cat.entity_type,
+              color: cat.color || '#3498db',
+            })
+            .select()
+            .single();
+          if (err || !created) {
+            result.errors.push(`Category “${cat.name}”: ${err?.message ?? 'failed'}`);
+            continue;
+          }
+          catIdMap.set(cat.id, (created as Category).id);
+          result.created += 1;
+        }
+
+        // refresh local category map for name lookups after inserts
+        const { data: latestCats } = await supabase.from('categories').select('*');
+        const allCats = (latestCats ?? []) as Category[];
+        const resolveCat = (oldId: string | null | undefined, entityType: CategoryEntityType) => {
+          if (!oldId) return null;
+          if (catIdMap.has(oldId)) return catIdMap.get(oldId)!;
+          const fromPayload = categories.find((c) => (c as Category).id === oldId) as
+            | Category
+            | undefined;
+          if (fromPayload) {
+            const match = allCats.find(
+              (c) =>
+                c.entity_type === entityType &&
+                c.name.toLowerCase() === fromPayload.name.toLowerCase(),
+            );
+            return match?.id ?? null;
+          }
+          return null;
+        };
+
+        const notes = Array.isArray(data.notes) ? data.notes : [];
+        for (const raw of notes) {
+          if (!raw || typeof raw !== 'object') continue;
+          const note = raw as Note;
+          if (!note.title) continue;
+          const existing = state.notes.find(
+            (n) => n.title.toLowerCase() === note.title.toLowerCase(),
+          );
+          if (existing && options.onDuplicate === 'skip') {
+            result.skipped += 1;
+            continue;
+          }
+          if (existing && options.onDuplicate === 'replace') {
+            await supabase
+              .from('notes')
+              .update({
+                content_md: note.content_md ?? '',
+                category_id: resolveCat(note.category_id, 'note'),
+                tags: note.tags ?? [],
+                is_favorite: !!note.is_favorite,
+                updated_at: nowIso(),
+              })
+              .eq('id', existing.id);
+            result.replaced += 1;
+            continue;
+          }
+          const title =
+            existing && options.onDuplicate === 'keep_both'
+              ? `${note.title} (import)`
+              : note.title;
+          const { error: err } = await supabase.from('notes').insert({
+            user_id: uid,
+            title,
+            content_md: note.content_md ?? '',
+            category_id: resolveCat(note.category_id, 'note'),
+            tags: note.tags ?? [],
+            is_favorite: !!note.is_favorite,
+          });
+          if (err) result.errors.push(`Note “${note.title}”: ${err.message}`);
+          else result.created += 1;
+        }
+
+        const snippets = Array.isArray(data.snippets) ? data.snippets : [];
+        for (const raw of snippets) {
+          if (!raw || typeof raw !== 'object') continue;
+          const snippet = raw as Snippet;
+          if (!snippet.title) continue;
+          const existing = state.snippets.find(
+            (n) => n.title.toLowerCase() === snippet.title.toLowerCase(),
+          );
+          if (existing && options.onDuplicate === 'skip') {
+            result.skipped += 1;
+            continue;
+          }
+          if (existing && options.onDuplicate === 'replace') {
+            await supabase
+              .from('snippets')
+              .update({
+                description: snippet.description ?? '',
+                language: snippet.language || 'text',
+                code: snippet.code ?? '',
+                category_id: resolveCat(snippet.category_id, 'snippet'),
+                tags: snippet.tags ?? [],
+                is_favorite: !!snippet.is_favorite,
+                updated_at: nowIso(),
+              })
+              .eq('id', existing.id);
+            result.replaced += 1;
+            continue;
+          }
+          const title =
+            existing && options.onDuplicate === 'keep_both'
+              ? `${snippet.title} (import)`
+              : snippet.title;
+          const { error: err } = await supabase.from('snippets').insert({
+            user_id: uid,
+            title,
+            description: snippet.description ?? '',
+            language: snippet.language || 'text',
+            code: snippet.code ?? '',
+            category_id: resolveCat(snippet.category_id, 'snippet'),
+            tags: snippet.tags ?? [],
+            is_favorite: !!snippet.is_favorite,
+          });
+          if (err) result.errors.push(`Snippet “${snippet.title}”: ${err.message}`);
+          else result.created += 1;
+        }
+
+        const tasks = Array.isArray(data.tasks) ? data.tasks : [];
+        for (const raw of tasks) {
+          if (!raw || typeof raw !== 'object') continue;
+          const task = raw as Task;
+          if (!task.title) continue;
+          const existing = state.tasks.find(
+            (t) => t.title.toLowerCase() === task.title.toLowerCase(),
+          );
+          if (existing && options.onDuplicate === 'skip') {
+            result.skipped += 1;
+            continue;
+          }
+          if (existing && options.onDuplicate === 'replace') {
+            await supabase
+              .from('tasks')
+              .update({
+                description: task.description ?? '',
+                category_id: resolveCat(task.category_id, 'task'),
+                status: task.status || 'todo',
+                priority: task.priority || 'medium',
+                due_date: task.due_date ?? null,
+                estimate_minutes: task.estimate_minutes ?? null,
+                is_favorite: !!task.is_favorite,
+                updated_at: nowIso(),
+              })
+              .eq('id', existing.id);
+            result.replaced += 1;
+            continue;
+          }
+          const title =
+            existing && options.onDuplicate === 'keep_both'
+              ? `${task.title} (import)`
+              : task.title;
+          const status = (task.status || 'todo') as TaskStatus;
+          const { error: err } = await supabase.from('tasks').insert({
+            user_id: uid,
+            title,
+            description: task.description ?? '',
+            category_id: resolveCat(task.category_id, 'task'),
+            status,
+            priority: task.priority || 'medium',
+            due_date: task.due_date ?? null,
+            estimate_minutes: task.estimate_minutes ?? null,
+            archived_at: null,
+            is_favorite: !!task.is_favorite,
+            completed_at: status === 'done' ? nowIso() : null,
+          });
+          if (err) result.errors.push(`Task “${task.title}”: ${err.message}`);
+          else result.created += 1;
+        }
+
+        await refresh();
+        return result;
       },
 
       exportTasksJson(tasks) {

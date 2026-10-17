@@ -2,34 +2,45 @@
 
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import MarkdownEditor from '@/components/markdown/MarkdownEditor';
 import MarkdownPreview from '@/components/markdown/MarkdownPreview';
+import MarkdownToolbar from '@/components/markdown/MarkdownToolbar';
 import ConfirmBanner from '@/components/ui/ConfirmBanner';
+import RowOverflowMenu from '@/components/ui/RowOverflowMenu';
 import SelectDropdown from '@/components/ui/SelectDropdown';
+import TagChipInput from '@/components/ui/TagChipInput';
+import { formatRelativeTime } from '@/lib/dates';
 import { useHub } from '@/lib/hub/HubProvider';
+import { countMarkdownWords } from '@/lib/markdownInsert';
+import { toastSuccess } from '@/lib/toast';
 
-function parseTags(raw: string): string[] {
-  return raw
-    .split(',')
-    .map((t) => t.trim())
-    .filter(Boolean);
-}
+type EditorMode = 'edit' | 'split' | 'preview';
 
 export default function NoteFormPage({ noteId }: { noteId?: string }) {
   const hub = useHub();
   const router = useRouter();
   const existing = noteId ? hub.getNote(noteId) : undefined;
-  const categories = useMemo(() => hub.listCategories('note'), [hub]);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const categories = useMemo(
+    () => hub.state.categories.filter((c) => c.entity_type === 'note'),
+    [hub.state.categories],
+  );
+  const tagSuggestions = useMemo(() => {
+    const set = new Set<string>();
+    for (const n of hub.state.notes) for (const t of n.tags) set.add(t);
+    for (const s of hub.state.snippets) for (const t of s.tags) set.add(t);
+    return [...set].sort((a, b) => a.localeCompare(b));
+  }, [hub.state.notes, hub.state.snippets]);
 
   const [title, setTitle] = useState(existing?.title ?? '');
   const [content, setContent] = useState(existing?.content_md ?? '');
   const [categoryId, setCategoryId] = useState(existing?.category_id ?? '');
-  const [tags, setTags] = useState((existing?.tags ?? []).join(', '));
+  const [tags, setTags] = useState<string[]>(existing?.tags ?? []);
   const [favorite, setFavorite] = useState(existing?.is_favorite ?? false);
-  const [mode, setMode] = useState<'edit' | 'preview'>('edit');
+  const [mode, setMode] = useState<EditorMode>('edit');
   const [dirty, setDirty] = useState(false);
-  const [savedMsg, setSavedMsg] = useState('');
+  const [justSaved, setJustSaved] = useState(false);
   const [saving, setSaving] = useState(false);
   const [confirm, setConfirm] = useState<'delete' | 'discard' | null>(null);
   const [formError, setFormError] = useState('');
@@ -39,9 +50,14 @@ export default function NoteFormPage({ noteId }: { noteId?: string }) {
     setTitle(existing.title);
     setContent(existing.content_md);
     setCategoryId(existing.category_id ?? '');
-    setTags(existing.tags.join(', '));
+    setTags(existing.tags);
     setFavorite(existing.is_favorite);
   }, [existing?.id]);
+
+  useEffect(() => {
+    if (!existing || dirty) return;
+    setCategoryId(existing.category_id ?? '');
+  }, [existing?.category_id, existing, dirty]);
 
   useEffect(() => {
     const onBeforeUnload = (e: BeforeUnloadEvent) => {
@@ -52,6 +68,19 @@ export default function NoteFormPage({ noteId }: { noteId?: string }) {
     window.addEventListener('beforeunload', onBeforeUnload);
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, [dirty]);
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        void save();
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  });
+
+  const wordCount = countMarkdownWords(content);
 
   if (hub.loading) {
     return <p className="text-sm text-[var(--color-muted)]">Loading…</p>;
@@ -72,7 +101,7 @@ export default function NoteFormPage({ noteId }: { noteId?: string }) {
     return (v: T) => {
       setter(v);
       setDirty(true);
-      setSavedMsg('');
+      setJustSaved(false);
     };
   }
 
@@ -88,16 +117,19 @@ export default function NoteFormPage({ noteId }: { noteId?: string }) {
         title: title.trim(),
         content_md: content,
         category_id: categoryId || null,
-        tags: parseTags(tags),
+        tags,
         is_favorite: favorite,
       };
       if (existing) {
         await hub.updateNote(existing.id, payload);
         setDirty(false);
-        setSavedMsg('Saved');
+        setJustSaved(true);
+        toastSuccess('Saved');
       } else {
         const note = await hub.createNote(payload);
         setDirty(false);
+        setJustSaved(true);
+        toastSuccess('Saved');
         router.replace(`/notes/${note.id}`);
       }
     } catch (e) {
@@ -113,16 +145,32 @@ export default function NoteFormPage({ noteId }: { noteId?: string }) {
     router.push('/notes');
   }
 
+  function statusLine() {
+    if (dirty) {
+      return <span className="text-[var(--color-warning)]">Unsaved changes</span>;
+    }
+    if (justSaved || existing) {
+      const when = existing ? formatRelativeTime(existing.updated_at) : 'just now';
+      return (
+        <span className="inline-flex items-center gap-2">
+          <span className="inline-flex h-2 w-2 shrink-0 rounded-full bg-[var(--color-success)]" />
+          <span className="text-[var(--color-success)]">Saved</span>
+          <span aria-hidden>·</span>
+          <span>{when}</span>
+        </span>
+      );
+    }
+    return <span>Draft</span>;
+  }
+
   return (
-    <div>
+    <div className="mx-auto max-w-[1100px]">
       <div className="page-header">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">
             {existing ? 'Edit note' : 'New note'}
           </h1>
-          <p className="mt-1 text-sm text-[var(--color-muted)]">
-            Explicit save · unsaved changes are warned on leave
-          </p>
+          <p className="mt-1 text-sm text-[var(--color-muted)]">{statusLine()}</p>
         </div>
         <div className="list-actions w-full sm:w-auto">
           <button
@@ -135,23 +183,19 @@ export default function NoteFormPage({ noteId }: { noteId?: string }) {
           >
             Back
           </button>
-          {existing && (
-            <button
-              type="button"
-              className="btn-danger flex-1 sm:flex-none"
-              onClick={() => setConfirm('delete')}
-            >
-              Delete
-            </button>
-          )}
           <button
             type="button"
             className="btn-primary flex-1 sm:flex-none"
-            onClick={save}
+            onClick={() => void save()}
             disabled={saving}
           >
             {saving ? 'Saving…' : 'Save'}
           </button>
+          {existing && (
+            <RowOverflowMenu
+              items={[{ label: 'Delete…', onClick: () => setConfirm('delete'), danger: true }]}
+            />
+          )}
         </div>
       </div>
 
@@ -184,18 +228,18 @@ export default function NoteFormPage({ noteId }: { noteId?: string }) {
           {formError}
         </div>
       )}
-      {savedMsg && <div className="mb-3 alert-success">{savedMsg}</div>}
 
       <div className="panel grid gap-4 p-4">
         <div>
           <label className="label">Title</label>
           <input
             className="input"
+            placeholder="Note title"
             value={title}
             onChange={(e) => markDirty(setTitle)(e.target.value)}
           />
         </div>
-        <div className="grid gap-4 md:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto]">
           <div>
             <label className="label">Category</label>
             <SelectDropdown
@@ -209,49 +253,99 @@ export default function NoteFormPage({ noteId }: { noteId?: string }) {
             />
           </div>
           <div>
-            <label className="label">Tags (comma-separated)</label>
-            <input
-              className="input"
+            <label className="label">Tags</label>
+            <TagChipInput
               value={tags}
-              onChange={(e) => markDirty(setTags)(e.target.value)}
+              onChange={markDirty(setTags)}
+              suggestions={tagSuggestions}
+              placeholder="Add tag…"
             />
           </div>
           <div className="flex items-end">
-            <label className="flex items-center gap-2 pb-2 text-sm">
-              <input
-                type="checkbox"
-                checked={favorite}
-                onChange={(e) => markDirty(setFavorite)(e.target.checked)}
+            <button
+              type="button"
+              className={`mb-0.5 inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition ${
+                favorite
+                  ? 'text-[var(--color-favorite)]'
+                  : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'
+              }`}
+              aria-pressed={favorite}
+              onClick={() => markDirty(setFavorite)(!favorite)}
+            >
+              ★ Favorite
+            </button>
+          </div>
+        </div>
+
+        <div>
+          <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+            {mode !== 'preview' ? (
+              <MarkdownToolbar
+                textareaRef={textareaRef}
+                value={content}
+                onChange={markDirty(setContent)}
               />
-              Favorite
-            </label>
+            ) : (
+              <span className="text-xs text-[var(--color-muted)]">Preview</span>
+            )}
+            <div className="inline-flex rounded-xl border border-[var(--color-border)] bg-[var(--color-chip)] p-0.5">
+              {(
+                [
+                  ['edit', 'Edit'],
+                  ['split', 'Split'],
+                  ['preview', 'Preview'],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  className={`min-h-8 rounded-lg px-3 py-1 text-xs font-medium transition ${
+                    mode === key
+                      ? 'bg-[var(--color-accent)] text-white'
+                      : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'
+                  }`}
+                  onClick={() => setMode(key)}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
           </div>
-        </div>
 
-        <div className="flex gap-2 border-b border-[var(--color-border)] pb-2">
-          <button
-            type="button"
-            className={mode === 'edit' ? 'btn-primary' : 'btn-secondary'}
-            onClick={() => setMode('edit')}
-          >
-            Edit
-          </button>
-          <button
-            type="button"
-            className={mode === 'preview' ? 'btn-primary' : 'btn-secondary'}
-            onClick={() => setMode('preview')}
-          >
-            Preview
-          </button>
-        </div>
+          {mode === 'edit' && (
+            <MarkdownEditor
+              ref={textareaRef}
+              value={content}
+              onChange={markDirty(setContent)}
+              rows={16}
+              aria-label="Note content"
+            />
+          )}
+          {mode === 'preview' && (
+            <div className="min-h-[320px] rounded-xl border border-[var(--color-border)] p-4">
+              <MarkdownPreview content={content} />
+            </div>
+          )}
+          {mode === 'split' && (
+            <div className="grid gap-3 md:grid-cols-2">
+              <MarkdownEditor
+                ref={textareaRef}
+                value={content}
+                onChange={markDirty(setContent)}
+                rows={16}
+                className="min-h-[320px] resize-none"
+                aria-label="Note content"
+              />
+              <div className="min-h-[320px] overflow-y-auto rounded-xl border border-[var(--color-border)] p-4">
+                <MarkdownPreview content={content} />
+              </div>
+            </div>
+          )}
 
-        {mode === 'edit' ? (
-          <MarkdownEditor value={content} onChange={markDirty(setContent)} />
-        ) : (
-          <div className="min-h-[280px] rounded-md border border-[var(--color-border)] p-4">
-            <MarkdownPreview content={content} />
-          </div>
-        )}
+          <p className="mt-2 text-xs text-[var(--color-muted)]">
+            {wordCount} word{wordCount === 1 ? '' : 's'} · Markdown · Ctrl S to save
+          </p>
+        </div>
       </div>
     </div>
   );

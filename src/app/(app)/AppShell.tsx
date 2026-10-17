@@ -5,6 +5,7 @@ import { Suspense, useEffect, useState } from 'react';
 import AppLogo from '@/components/layout/AppLogo';
 import GlobalSearch from '@/components/layout/GlobalSearch';
 import Sidebar from '@/components/layout/Sidebar';
+import ToastProvider from '@/components/ui/ToastProvider';
 
 function currentFromPath(pathname: string): string {
   if (pathname === '/') return 'dashboard';
@@ -48,8 +49,20 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     };
   }, [menuOpen]);
 
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault();
+        window.dispatchEvent(new Event('developer-hub:focus-search'));
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
   return (
     <div className="flex min-h-screen">
+      <ToastProvider />
       <div className="hidden lg:flex lg:sticky lg:top-0 lg:h-screen lg:shrink-0">
         <Sidebar current={current} />
       </div>
@@ -96,7 +109,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold tracking-tight">Developer Hub</div>
             <div className="truncate text-xs text-[var(--color-muted)] capitalize">
-              {current === 'dashboard' ? 'Dashboard' : current || 'Search'}
+              {current === 'dashboard' ? 'Home' : current || 'Search'}
             </div>
           </div>
           <Suspense fallback={null}>
@@ -110,7 +123,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </Suspense>
         </div>
 
-        <main className="flex-1 px-3 py-4 sm:px-4 sm:py-6 lg:px-8 lg:py-6">{children}</main>
+        <main className="flex-1 px-3 py-5 sm:px-4 sm:py-7 lg:px-8 lg:py-8">{children}</main>
       </div>
     </div>
   );

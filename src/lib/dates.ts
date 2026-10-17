@@ -1,21 +1,43 @@
+/** App calendar / display timezone (Sri Lanka). */
+export const APP_TIMEZONE = 'Asia/Colombo';
+
 export function nowIso(): string {
   return new Date().toISOString();
 }
 
+/** Today's calendar date in Sri Lanka as YYYY-MM-DD. */
 export function todayDate(): string {
-  return new Date().toISOString().slice(0, 10);
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: APP_TIMEZONE,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(new Date());
 }
 
 export function addDays(dateStr: string, days: number): string {
-  const d = new Date(`${dateStr}T12:00:00`);
-  d.setDate(d.getDate() + days);
-  return d.toISOString().slice(0, 10);
+  const [y, m, d] = dateStr.split('-').map(Number);
+  const utc = new Date(Date.UTC(y, m - 1, d + days));
+  const yyyy = utc.getUTCFullYear();
+  const mm = String(utc.getUTCMonth() + 1).padStart(2, '0');
+  const dd = String(utc.getUTCDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 export function formatDate(isoOrDate: string | null | undefined): string {
   if (!isoOrDate) return '—';
-  const d = new Date(isoOrDate.length === 10 ? `${isoOrDate}T12:00:00` : isoOrDate);
-  return d.toLocaleDateString(undefined, {
+  if (isoOrDate.length === 10) {
+    const [y, m, d] = isoOrDate.split('-').map(Number);
+    const date = new Date(Date.UTC(y, m - 1, d, 12));
+    return date.toLocaleDateString('en-GB', {
+      timeZone: 'UTC',
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric',
+    });
+  }
+  return new Date(isoOrDate).toLocaleDateString('en-GB', {
+    timeZone: APP_TIMEZONE,
     year: 'numeric',
     month: 'short',
     day: 'numeric',
@@ -23,13 +45,62 @@ export function formatDate(isoOrDate: string | null | undefined): string {
 }
 
 export function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
+  return new Date(iso).toLocaleString('en-GB', {
+    timeZone: APP_TIMEZONE,
     year: 'numeric',
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
   });
+}
+
+/** Weekday + short date in Sri Lanka, e.g. "Saturday, 17 Oct 2026". */
+export function formatWeekdayDate(isoOrDate?: string | null): string {
+  if (!isoOrDate) {
+    return new Date().toLocaleDateString('en-GB', {
+      timeZone: APP_TIMEZONE,
+      weekday: 'long',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+  if (isoOrDate.length === 10) {
+    const [y, m, d] = isoOrDate.split('-').map(Number);
+    const date = new Date(Date.UTC(y, m - 1, d, 12));
+    return date.toLocaleDateString('en-GB', {
+      timeZone: 'UTC',
+      weekday: 'long',
+      day: 'numeric',
+      month: 'short',
+      year: 'numeric',
+    });
+  }
+  return new Date(isoOrDate).toLocaleDateString('en-GB', {
+    timeZone: APP_TIMEZONE,
+    weekday: 'long',
+    day: 'numeric',
+    month: 'short',
+    year: 'numeric',
+  });
+}
+
+export function formatRelativeTime(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  const then = new Date(iso.length === 10 ? `${iso}T12:00:00+05:30` : iso).getTime();
+  if (Number.isNaN(then)) return '—';
+  const diffMs = Date.now() - then;
+  const abs = Math.abs(diffMs);
+  const sec = Math.round(abs / 1000);
+  if (sec < 45) return 'just now';
+  const min = Math.round(sec / 60);
+  if (min < 60) return `${min} minute${min === 1 ? '' : 's'} ago`;
+  const hr = Math.round(min / 60);
+  if (hr < 24) return `${hr} hour${hr === 1 ? '' : 's'} ago`;
+  const day = Math.round(hr / 24);
+  if (day < 14) return `${day} day${day === 1 ? '' : 's'} ago`;
+  return formatDate(iso);
 }
 
 export function isOverdue(dueDate: string | null, completed = false): boolean {
