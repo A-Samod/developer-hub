@@ -8,10 +8,10 @@ import ConfirmBanner from '@/components/ui/ConfirmBanner';
 import { createClient } from '@/lib/supabase/client';
 
 const links = [
-  { href: '/', label: 'Dashboard', key: 'dashboard' },
-  { href: '/tasks', label: 'Task Manager', key: 'tasks' },
-  { href: '/notes', label: 'Knowledge Base', key: 'notes' },
-  { href: '/snippets', label: 'Code Snippets', key: 'snippets' },
+  { href: '/', label: 'Home', key: 'dashboard' },
+  { href: '/tasks', label: 'Tasks', key: 'tasks' },
+  { href: '/notes', label: 'Notes', key: 'notes' },
+  { href: '/snippets', label: 'Snippets', key: 'snippets' },
   { href: '/settings', label: 'Settings', key: 'settings' },
 ];
 

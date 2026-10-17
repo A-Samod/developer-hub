@@ -15,6 +15,7 @@ export default function SettingsPage() {
   const [color, setColor] = useState('#2563eb');
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
+  const [editColor, setEditColor] = useState('#2563eb');
   const [message, setMessage] = useState('');
   const [confirmSeed, setConfirmSeed] = useState(false);
   const [deleteCategory, setDeleteCategory] = useState<{
@@ -37,11 +38,16 @@ export default function SettingsPage() {
     setMessage('Category added');
   }
 
-  async function saveRename(id: string) {
+  async function saveEdit(id: string) {
     if (!editName.trim()) return;
-    await hub.updateCategory(id, { name: editName.trim() });
+    await hub.updateCategory(id, { name: editName.trim(), color: editColor });
     setEditingId(null);
-    setMessage('Category renamed');
+    setMessage('Category updated');
+  }
+
+  async function changeCategoryColor(id: string, nextColor: string) {
+    await hub.updateCategory(id, { color: nextColor });
+    setMessage('Category color updated');
   }
 
   function downloadExport() {
@@ -121,7 +127,7 @@ export default function SettingsPage() {
           >
             {entityTypes.map((t) => (
               <option key={t} value={t}>
-                {t}
+                {t.charAt(0).toUpperCase() + t.slice(1)}
               </option>
             ))}
           </select>
@@ -151,12 +157,15 @@ export default function SettingsPage() {
               <ul className="divide-y divide-[var(--color-border)]">
                 {group.items.map((cat) => (
                   <li key={cat.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-                    <span
-                      className="h-3 w-3 shrink-0 rounded-full"
-                      style={{ background: cat.color }}
-                    />
                     {editingId === cat.id ? (
                       <>
+                        <input
+                          type="color"
+                          aria-label={`Color for ${cat.name}`}
+                          className="h-8 w-10 shrink-0 cursor-pointer rounded border border-[var(--color-border)] bg-transparent p-0.5"
+                          value={editColor}
+                          onChange={(e) => setEditColor(e.target.value)}
+                        />
                         <input
                           className="input min-w-0 flex-1"
                           value={editName}
@@ -165,7 +174,7 @@ export default function SettingsPage() {
                         <button
                           type="button"
                           className="btn-primary shrink-0"
-                          onClick={() => void saveRename(cat.id)}
+                          onClick={() => void saveEdit(cat.id)}
                         >
                           Save
                         </button>
@@ -179,6 +188,14 @@ export default function SettingsPage() {
                       </>
                     ) : (
                       <>
+                        <input
+                          type="color"
+                          aria-label={`Change color for ${cat.name}`}
+                          title="Change color"
+                          className="h-8 w-10 shrink-0 cursor-pointer rounded border border-[var(--color-border)] bg-transparent p-0.5"
+                          value={cat.color}
+                          onChange={(e) => void changeCategoryColor(cat.id, e.target.value)}
+                        />
                         <span className="min-w-0 flex-1">{cat.name}</span>
                         <button
                           type="button"
@@ -186,9 +203,10 @@ export default function SettingsPage() {
                           onClick={() => {
                             setEditingId(cat.id);
                             setEditName(cat.name);
+                            setEditColor(cat.color);
                           }}
                         >
-                          Rename
+                          Edit
                         </button>
                         <button
                           type="button"

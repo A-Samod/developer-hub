@@ -80,7 +80,7 @@ export default function SnippetsPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Code Snippets</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Snippets</h1>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
             Reusable commands and code with one-click copy
           </p>

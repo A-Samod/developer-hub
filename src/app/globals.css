@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Match app theme (html.dark) instead of prefers-color-scheme */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-surface: var(--surface);
   --color-panel: var(--panel);

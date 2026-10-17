@@ -159,7 +159,7 @@ export default function TasksPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Task Manager</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Tasks</h1>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
             Structured development work items
           </p>

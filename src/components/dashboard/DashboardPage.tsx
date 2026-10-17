@@ -48,7 +48,7 @@ export default function DashboardPage() {
   return (
     <div>
       <div className="mb-6">
-        <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">Home</h1>
         <p className="mt-1 text-sm text-[var(--color-muted)]">
           Today is {formatDate(todayDate())}
         </p>

@@ -61,7 +61,7 @@ export default function NotesPage() {
     <div>
       <div className="page-header">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Knowledge Base</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">Notes</h1>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
             Technical notes and Markdown documentation
           </p>

@@ -96,7 +96,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold tracking-tight">Developer Hub</div>
             <div className="truncate text-xs text-[var(--color-muted)] capitalize">
-              {current === 'dashboard' ? 'Dashboard' : current || 'Search'}
+              {current === 'dashboard' ? 'Home' : current || 'Search'}
             </div>
           </div>
           <Suspense fallback={null}>
