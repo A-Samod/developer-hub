@@ -10,6 +10,19 @@ export default function MarkdownPreview({ content }: { content: string }) {
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
         components={{
+          a({ href, children, ...props }) {
+            const external = href?.startsWith('http://') || href?.startsWith('https://');
+            return (
+              <a
+                href={href}
+                className="text-[var(--color-accent)] underline underline-offset-2"
+                {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
+                {...props}
+              >
+                {children}
+              </a>
+            );
+          },
           code({ className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || '');
             const code = String(children).replace(/\n$/, '');

@@ -4,22 +4,30 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { TagChip } from '@/components/tasks/StatusBadge';
 import ConfirmBanner from '@/components/ui/ConfirmBanner';
-import ListPagination from '@/components/ui/ListPagination';
+import LoadMoreButton from '@/components/ui/LoadMoreButton';
+import RowOverflowMenu from '@/components/ui/RowOverflowMenu';
 import SelectDropdown from '@/components/ui/SelectDropdown';
-import { formatDateTime } from '@/lib/dates';
+import { formatRelativeTime } from '@/lib/dates';
 import { useHub } from '@/lib/hub/HubProvider';
-import { useListPagination } from '@/lib/useListPagination';
+import { stripMarkdownPreview } from '@/lib/textPreview';
+import { toastSuccess, toastUndo } from '@/lib/toast';
+import { useLoadMore } from '@/lib/useLoadMore';
 
 type SortKey = 'updated' | 'title';
 
 export default function NotesPage() {
   const hub = useHub();
-  const categories = useMemo(() => hub.listCategories('note'), [hub]);
+  const categories = useMemo(
+    () => hub.state.categories.filter((c) => c.entity_type === 'note'),
+    [hub.state.categories],
+  );
   const [query, setQuery] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
   const [sort, setSort] = useState<SortKey>('updated');
   const [deleteId, setDeleteId] = useState<string | null>(null);
+
+  const hasFilters = Boolean(query.trim() || categoryId || favoritesOnly);
 
   const notes = useMemo(() => {
     let items = [...hub.state.notes];
@@ -41,17 +49,26 @@ export default function NotesPage() {
   }, [hub.state.notes, query, categoryId, favoritesOnly, sort]);
 
   const filterKey = `${query}|${categoryId}|${favoritesOnly}|${sort}`;
-  const {
-    pageSize,
-    setPageSize,
-    currentPage,
-    setPage,
-    totalPages,
-    pageStart,
-    pageEnd,
-    pagedItems: pagedNotes,
-    total,
-  } = useListPagination(notes, filterKey);
+  const { visibleItems: visibleNotes, hasMore, remaining, loadMore, total, visibleCount } =
+    useLoadMore(notes, filterKey);
+
+  async function confirmDelete() {
+    if (!deleteId) return;
+    const snapshot = hub.getNote(deleteId);
+    await hub.deleteNote(deleteId);
+    setDeleteId(null);
+    if (!snapshot) return;
+    toastUndo('Note deleted', async () => {
+      await hub.createNote({
+        title: snapshot.title,
+        content_md: snapshot.content_md,
+        category_id: snapshot.category_id,
+        tags: [...snapshot.tags],
+        is_favorite: snapshot.is_favorite,
+      });
+      toastSuccess('Note restored');
+    });
+  }
 
   if (hub.loading) {
     return <p className="text-sm text-[var(--color-muted)]">Loading notes…</p>;
@@ -96,90 +113,114 @@ export default function NotesPage() {
             { value: 'title', label: 'Title A–Z' },
           ]}
         />
-        <label className="flex min-h-10 items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={favoritesOnly}
-            onChange={(e) => setFavoritesOnly(e.target.checked)}
-          />
-          Favorites only
-        </label>
+        <button
+          type="button"
+          className={favoritesOnly ? 'btn-primary' : 'btn-secondary'}
+          aria-pressed={favoritesOnly}
+          onClick={() => setFavoritesOnly((v) => !v)}
+        >
+          ★ Favorites
+        </button>
       </div>
 
       {deleteId && (
         <ConfirmBanner
           danger
           title="Delete this note?"
-          message="This permanently removes the note. This cannot be undone."
+          message="This permanently removes the note. You can Undo from the toast for a short time."
           confirmLabel="Delete note"
-          onConfirm={async () => {
-            await hub.deleteNote(deleteId);
-            setDeleteId(null);
-          }}
+          onConfirm={() => void confirmDelete()}
           onCancel={() => setDeleteId(null)}
         />
       )}
 
-      {notes.length === 0 ? (
+      {hub.state.notes.length === 0 ? (
         <div className="panel px-5 py-10 text-center">
-          <p className="font-medium">No notes match</p>
+          <p className="font-medium">No notes yet</p>
           <p className="mt-1 text-sm text-[var(--color-muted)]">
-            Try clearing filters or create a new note.
+            Create your first technical note.
           </p>
           <Link href="/notes/new" className="btn-primary mt-4 inline-flex">
             New note
           </Link>
         </div>
+      ) : notes.length === 0 && hasFilters ? (
+        <div className="panel px-5 py-10 text-center text-sm text-[var(--color-muted)]">
+          No notes match your filters
+        </div>
       ) : (
         <>
           <ul className="panel divide-y divide-[var(--color-border)]">
-            {pagedNotes.map((note) => {
+            {visibleNotes.map((note) => {
               const cat = categories.find((c) => c.id === note.category_id);
+              const preview = note.content_md ? stripMarkdownPreview(note.content_md) : '';
               return (
-                <li key={note.id} className="list-row">
+                <li
+                  key={note.id}
+                  className="flex items-start gap-3 px-4 py-3 hover:bg-[var(--color-surface)]"
+                >
                   <Link href={`/notes/${note.id}`} className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-medium">{note.title}</span>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className="truncate font-medium">{note.title}</span>
                       {note.is_favorite && (
-                        <span className="text-xs text-[var(--color-favorite)]">Favorite</span>
-                      )}
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-[var(--color-muted)]">
-                      {cat && (
-                        <span style={{ color: cat.color }} className="font-medium">
-                          {cat.name}
+                        <span
+                          className="shrink-0 text-sm leading-none text-[var(--color-favorite)]"
+                          aria-label="Favorite"
+                        >
+                          ★
                         </span>
                       )}
-                      <span>Updated {formatDateTime(note.updated_at)}</span>
-                      {note.tags.slice(0, 3).map((t) => (
-                        <TagChip key={t} tag={t} />
-                      ))}
-                      {note.tags.length > 3 && <span>+{note.tags.length - 3}</span>}
                     </div>
+                    {preview ? (
+                      <p className="mt-0.5 truncate text-xs text-[var(--color-muted)] opacity-75">
+                        {preview}
+                      </p>
+                    ) : null}
+                    {(cat || note.tags.length > 0) && (
+                      <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                        {cat && (
+                          <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-chip)] px-2 py-0.5 text-xs font-medium text-[var(--color-chip-text)]">
+                            <span
+                              className="h-1.5 w-1.5 shrink-0 rounded-full"
+                              style={{ backgroundColor: cat.color }}
+                              aria-hidden
+                            />
+                            {cat.name}
+                          </span>
+                        )}
+                        {note.tags.slice(0, 3).map((t) => (
+                          <TagChip key={t} tag={t} />
+                        ))}
+                        {note.tags.length > 3 && (
+                          <span className="text-xs text-[var(--color-muted)]">
+                            +{note.tags.length - 3}
+                          </span>
+                        )}
+                      </div>
+                    )}
                   </Link>
-                  <div className="list-actions">
-                    <button
-                      type="button"
-                      className="btn-danger w-full sm:w-auto"
-                      onClick={() => setDeleteId(note.id)}
-                    >
-                      Delete
-                    </button>
+                  <div className="flex shrink-0 items-start gap-2 pt-0.5">
+                    <span className="whitespace-nowrap text-xs text-[var(--color-muted)]">
+                      {formatRelativeTime(note.updated_at)}
+                    </span>
+                    <RowOverflowMenu
+                      items={[
+                        { label: 'Edit', href: `/notes/${note.id}` },
+                        { label: 'Delete…', onClick: () => setDeleteId(note.id), danger: true },
+                      ]}
+                    />
                   </div>
                 </li>
               );
             })}
           </ul>
-          <ListPagination
-            pageStart={pageStart}
-            pageEnd={pageEnd}
+          <LoadMoreButton
+            hasMore={hasMore}
+            remaining={remaining}
             total={total}
-            pageSize={pageSize}
-            onPageSizeChange={setPageSize}
-            currentPage={currentPage}
-            totalPages={totalPages}
-            onPageChange={setPage}
-            perPageLabel="Notes per page"
+            visibleCount={visibleCount}
+            onLoadMore={loadMore}
+            itemLabel="notes"
           />
         </>
       )}

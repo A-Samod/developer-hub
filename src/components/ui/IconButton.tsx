@@ -27,7 +27,7 @@ export default function IconButton({
       type="button"
       aria-label={label}
       title={label}
-      className={`inline-flex h-10 w-10 shrink-0 cursor-pointer items-center justify-center rounded-xl transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50 ${tone} ${className}`}
+      className={`inline-flex h-8 w-8 shrink-0 cursor-pointer items-center justify-center rounded-lg border border-[var(--color-border)] bg-[var(--color-panel)] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-accent)] disabled:cursor-not-allowed disabled:opacity-50 md:h-8 md:w-8 ${tone} ${className}`}
       {...rest}
     >
       {children}
