@@ -243,3 +243,11 @@
     @apply border border-[var(--color-border)] px-2 py-1;
   }
 }
+
+/* Sonner action button: force readable contrast in dark mode */
+[data-sonner-toaster] [data-button][data-action='true'],
+[data-sonner-toast] [data-button][data-action] {
+  background: var(--accent) !important;
+  color: #fff !important;
+  border: none !important;
+}
