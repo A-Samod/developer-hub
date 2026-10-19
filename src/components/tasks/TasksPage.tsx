@@ -96,19 +96,17 @@ export default function TasksPage() {
         break;
     }
 
-    if (view !== 'completed') {
-      if (statuses.length > 0) {
-        items = items.filter((t) => statuses.includes(t.status));
-      }
-      if (priority) items = items.filter((t) => t.priority === priority);
-      if (dueOn) {
-        items = items.filter((t) => t.due_date === dueOn);
-      } else {
-        if (dueBucket === 'overdue') items = items.filter((t) => isOverdue(t.due_date, false));
-        if (dueBucket === 'today') items = items.filter((t) => isDueToday(t.due_date));
-        if (dueBucket === 'upcoming') items = items.filter((t) => isUpcoming(t.due_date));
-        if (dueBucket === 'none') items = items.filter((t) => !t.due_date);
-      }
+    if (statuses.length > 0) {
+      items = items.filter((t) => statuses.includes(t.status));
+    }
+    if (priority) items = items.filter((t) => t.priority === priority);
+    if (dueOn) {
+      items = items.filter((t) => t.due_date === dueOn);
+    } else {
+      if (dueBucket === 'overdue') items = items.filter((t) => isOverdue(t.due_date, false));
+      if (dueBucket === 'today') items = items.filter((t) => isDueToday(t.due_date));
+      if (dueBucket === 'upcoming') items = items.filter((t) => isUpcoming(t.due_date));
+      if (dueBucket === 'none') items = items.filter((t) => !t.due_date);
     }
 
     items.sort((a, b) => {
