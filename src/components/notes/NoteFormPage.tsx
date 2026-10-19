@@ -6,9 +6,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import MarkdownEditor from '@/components/markdown/MarkdownEditor';
 import MarkdownPreview from '@/components/markdown/MarkdownPreview';
 import MarkdownToolbar from '@/components/markdown/MarkdownToolbar';
+import CategorySelect from '@/components/ui/CategorySelect';
 import ConfirmBanner from '@/components/ui/ConfirmBanner';
 import RowOverflowMenu from '@/components/ui/RowOverflowMenu';
-import SelectDropdown from '@/components/ui/SelectDropdown';
 import TagChipInput from '@/components/ui/TagChipInput';
 import { formatRelativeTime } from '@/lib/dates';
 import { useHub } from '@/lib/hub/HubProvider';
@@ -22,10 +22,6 @@ export default function NoteFormPage({ noteId }: { noteId?: string }) {
   const router = useRouter();
   const existing = noteId ? hub.getNote(noteId) : undefined;
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const categories = useMemo(
-    () => hub.state.categories.filter((c) => c.entity_type === 'note'),
-    [hub.state.categories],
-  );
   const tagSuggestions = useMemo(() => {
     const set = new Set<string>();
     for (const n of hub.state.notes) for (const t of n.tags) set.add(t);
@@ -242,14 +238,10 @@ export default function NoteFormPage({ noteId }: { noteId?: string }) {
         <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto]">
           <div>
             <label className="label">Category</label>
-            <SelectDropdown
-              aria-label="Category"
+            <CategorySelect
+              entityType="note"
               value={categoryId}
               onChange={markDirty(setCategoryId)}
-              options={[
-                { value: '', label: 'None' },
-                ...categories.map((c) => ({ value: c.id, label: c.name, color: c.color })),
-              ]}
             />
           </div>
           <div>

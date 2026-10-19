@@ -11,6 +11,7 @@ import {
 } from 'react';
 import { createClient } from '@/lib/supabase/client';
 import { nowIso } from '@/lib/dates';
+import { sortCategories } from '@/lib/sortCategories';
 import type {
   Category,
   CategoryEntityType,
@@ -38,8 +39,12 @@ type HubContextValue = {
   }) => Promise<Category>;
   updateCategory: (
     id: string,
-    patch: Partial<Pick<Category, 'name' | 'color'>>,
+    patch: Partial<Pick<Category, 'name' | 'color' | 'position'>>,
   ) => Promise<Category | null>;
+  reorderCategories: (
+    entityType: CategoryEntityType,
+    orderedIds: string[],
+  ) => Promise<void>;
   deleteCategory: (id: string) => Promise<boolean>;
   getNote: (id: string) => Note | undefined;
   createNote: (
@@ -126,7 +131,7 @@ export function HubProvider({ children }: { children: ReactNode }) {
     setUserId(user.id);
 
     const [categories, notes, snippets, tasks, task_resources] = await Promise.all([
-      supabase.from('categories').select('*').order('name'),
+      supabase.from('categories').select('*').order('position').order('name'),
       supabase.from('notes').select('*').order('updated_at', { ascending: false }),
       supabase.from('snippets').select('*').order('updated_at', { ascending: false }),
       supabase.from('tasks').select('*').order('updated_at', { ascending: false }),
@@ -142,7 +147,7 @@ export function HubProvider({ children }: { children: ReactNode }) {
     if (firstError) throw firstError;
 
     setState({
-      categories: (categories.data ?? []) as Category[],
+      categories: sortCategories((categories.data ?? []) as Category[]),
       notes: (notes.data ?? []) as Note[],
       snippets: (snippets.data ?? []) as Snippet[],
       tasks: (tasks.data ?? []) as Task[],
@@ -181,9 +186,10 @@ export function HubProvider({ children }: { children: ReactNode }) {
       seedCategoriesIfEmpty,
 
       listCategories(entityType?: CategoryEntityType) {
-        return entityType
+        const items = entityType
           ? state.categories.filter((c) => c.entity_type === entityType)
           : state.categories;
+        return sortCategories(items);
       },
       getCategory(id) {
         if (!id) return undefined;
@@ -191,6 +197,9 @@ export function HubProvider({ children }: { children: ReactNode }) {
       },
       async createCategory(input) {
         const uid = requireUserId(userId);
+        const siblings = state.categories.filter((c) => c.entity_type === input.entity_type);
+        const position =
+          siblings.reduce((max, c) => Math.max(max, c.position ?? 0), -1) + 1;
         const { data, error: err } = await supabase
           .from('categories')
           .insert({
@@ -198,12 +207,16 @@ export function HubProvider({ children }: { children: ReactNode }) {
             name: input.name.trim(),
             entity_type: input.entity_type,
             color: input.color,
+            position,
           })
           .select()
           .single();
         if (err) throw err;
         const category = data as Category;
-        setState((s) => ({ ...s, categories: [...s.categories, category] }));
+        setState((s) => ({
+          ...s,
+          categories: sortCategories([...s.categories, category]),
+        }));
         return category;
       },
       async updateCategory(id, patch) {
@@ -218,9 +231,35 @@ export function HubProvider({ children }: { children: ReactNode }) {
         const category = data as Category;
         setState((s) => ({
           ...s,
-          categories: s.categories.map((c) => (c.id === id ? category : c)),
+          categories: sortCategories(
+            s.categories.map((c) => (c.id === id ? category : c)),
+          ),
         }));
         return category;
+      },
+      async reorderCategories(entityType, orderedIds) {
+        const uid = requireUserId(userId);
+        const updates = orderedIds.map((id, position) => ({ id, position }));
+        setState((s) => {
+          const next = s.categories.map((c) => {
+            if (c.entity_type !== entityType) return c;
+            const idx = orderedIds.indexOf(c.id);
+            if (idx === -1) return c;
+            return { ...c, position: idx };
+          });
+          return { ...s, categories: sortCategories(next) };
+        });
+        const results = await Promise.all(
+          updates.map(({ id, position }) =>
+            supabase
+              .from('categories')
+              .update({ position })
+              .eq('id', id)
+              .eq('user_id', uid),
+          ),
+        );
+        const failed = results.find((r) => r.error);
+        if (failed?.error) throw failed.error;
       },
       async deleteCategory(id) {
         const { error: err } = await supabase.from('categories').delete().eq('id', id);
@@ -542,6 +581,17 @@ export function HubProvider({ children }: { children: ReactNode }) {
             result.skipped += 1;
             continue;
           }
+          const siblings = (
+            await supabase
+              .from('categories')
+              .select('position')
+              .eq('user_id', uid)
+              .eq('entity_type', cat.entity_type)
+          ).data;
+          const position =
+            typeof cat.position === 'number'
+              ? cat.position
+              : (siblings ?? []).reduce((max, c) => Math.max(max, c.position ?? 0), -1) + 1;
           const { data: created, error: err } = await supabase
             .from('categories')
             .insert({
@@ -549,6 +599,7 @@ export function HubProvider({ children }: { children: ReactNode }) {
               name: cat.name,
               entity_type: cat.entity_type,
               color: cat.color || '#3498db',
+              position,
             })
             .select()
             .single();

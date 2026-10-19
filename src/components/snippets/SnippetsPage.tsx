@@ -15,10 +15,7 @@ type SortKey = 'updated' | 'title';
 
 export default function SnippetsPage() {
   const hub = useHub();
-  const categories = useMemo(
-    () => hub.state.categories.filter((c) => c.entity_type === 'snippet'),
-    [hub.state.categories],
-  );
+  const categories = useMemo(() => hub.listCategories('snippet'), [hub, hub.state.categories]);
   const [query, setQuery] = useState('');
   const [language, setLanguage] = useState('');
   const [categoryId, setCategoryId] = useState('');

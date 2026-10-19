@@ -9,6 +9,7 @@ export interface Category {
   name: string;
   entity_type: CategoryEntityType;
   color: string;
+  position: number;
   created_at: string;
 }
 

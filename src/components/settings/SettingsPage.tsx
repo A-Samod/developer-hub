@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import ThemeToggle from '@/components/layout/ThemeToggle';
 import ColorSwatchPicker from '@/components/ui/ColorSwatchPicker';
 import ConfirmBanner from '@/components/ui/ConfirmBanner';
@@ -20,11 +20,19 @@ const entityLabels: Record<CategoryEntityType, string> = {
   task: 'Tasks',
 };
 
+function parseEntityType(value: string | null): CategoryEntityType | null {
+  if (value === 'note' || value === 'snippet' || value === 'task') return value;
+  return null;
+}
+
 export default function SettingsPage() {
   const hub = useHub();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const fileRef = useRef<HTMLInputElement>(null);
-  const [entityType, setEntityType] = useState<CategoryEntityType>('note');
+  const [entityType, setEntityType] = useState<CategoryEntityType>(
+    () => parseEntityType(searchParams.get('type')) ?? 'note',
+  );
   const [name, setName] = useState('');
   const [color, setColor] = useState<string>(DEFAULT_CATEGORY_COLOR);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -40,6 +48,7 @@ export default function SettingsPage() {
   const [confirmSignOut, setConfirmSignOut] = useState(false);
   const [importStrategy, setImportStrategy] = useState<'skip' | 'replace' | 'keep_both'>('skip');
   const [importing, setImporting] = useState(false);
+  const [dragId, setDragId] = useState<string | null>(null);
 
   useEffect(() => {
     const supabase = createClient();
@@ -48,9 +57,14 @@ export default function SettingsPage() {
     });
   }, []);
 
+  useEffect(() => {
+    const next = parseEntityType(searchParams.get('type'));
+    if (next) setEntityType(next);
+  }, [searchParams]);
+
   const categoriesForType = useMemo(
-    () => hub.state.categories.filter((c) => c.entity_type === entityType),
-    [hub.state.categories, entityType],
+    () => hub.listCategories(entityType),
+    [hub, hub.state.categories, entityType],
   );
 
   function itemCountForCategory(id: string, type: CategoryEntityType) {
@@ -72,6 +86,44 @@ export default function SettingsPage() {
     await hub.updateCategory(id, { name: editName.trim(), color: editColor });
     setEditingId(null);
     toastSuccess('Category updated');
+  }
+
+  async function moveCategory(id: string, direction: -1 | 1) {
+    const ids = categoriesForType.map((c) => c.id);
+    const index = ids.indexOf(id);
+    const next = index + direction;
+    if (index < 0 || next < 0 || next >= ids.length) return;
+    const ordered = [...ids];
+    const [item] = ordered.splice(index, 1);
+    ordered.splice(next, 0, item);
+    try {
+      await hub.reorderCategories(entityType, ordered);
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : 'Could not reorder');
+    }
+  }
+
+  async function dropOnCategory(targetId: string) {
+    if (!dragId || dragId === targetId) {
+      setDragId(null);
+      return;
+    }
+    const ids = categoriesForType.map((c) => c.id);
+    const from = ids.indexOf(dragId);
+    const to = ids.indexOf(targetId);
+    if (from < 0 || to < 0) {
+      setDragId(null);
+      return;
+    }
+    const ordered = [...ids];
+    const [item] = ordered.splice(from, 1);
+    ordered.splice(to, 0, item);
+    setDragId(null);
+    try {
+      await hub.reorderCategories(entityType, ordered);
+    } catch (err) {
+      toastError(err instanceof Error ? err.message : 'Could not reorder');
+    }
   }
 
   function downloadExport() {
@@ -195,7 +247,10 @@ export default function SettingsPage() {
                   ? 'bg-[var(--color-accent)] text-white shadow-sm'
                   : 'text-[var(--color-muted)] hover:text-[var(--color-ink)]'
               }`}
-              onClick={() => setEntityType(t)}
+              onClick={() => {
+                setEntityType(t);
+                router.replace(`/settings?type=${t}`, { scroll: false });
+              }}
             >
               {entityLabels[t]}
             </button>
@@ -215,6 +270,10 @@ export default function SettingsPage() {
           </button>
         </form>
 
+        <p className="mb-2 text-xs text-[var(--color-muted)]">
+          Drag to reorder · Alt + ↑ / ↓ on the handle to move with the keyboard
+        </p>
+
         <ul className="panel divide-y divide-[var(--color-border)]">
           {categoriesForType.length === 0 ? (
             <li className="px-4 py-6 text-sm text-[var(--color-muted)]">No categories yet.</li>
@@ -222,7 +281,20 @@ export default function SettingsPage() {
             categoriesForType.map((cat) => {
               const count = itemCountForCategory(cat.id, entityType);
               return (
-                <li key={cat.id} className="flex items-center gap-3 px-4 py-3 text-sm">
+                <li
+                  key={cat.id}
+                  className={`flex items-center gap-3 px-4 py-3 text-sm ${
+                    dragId === cat.id ? 'opacity-60' : ''
+                  }`}
+                  onDragOver={(e) => {
+                    if (!dragId || editingId) return;
+                    e.preventDefault();
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault();
+                    void dropOnCategory(cat.id);
+                  }}
+                >
                   {editingId === cat.id ? (
                     <>
                       <ColorSwatchPicker value={editColor} onChange={setEditColor} size="sm" />
@@ -248,6 +320,33 @@ export default function SettingsPage() {
                     </>
                   ) : (
                     <>
+                      <button
+                        type="button"
+                        draggable
+                        className="inline-flex h-8 w-8 shrink-0 cursor-grab items-center justify-center rounded-lg border border-[var(--color-border)] text-[var(--color-muted)] active:cursor-grabbing hover:bg-[var(--color-chip)] hover:text-[var(--color-ink)]"
+                        aria-label={`Reorder ${cat.name}. Hold Alt and press arrow up or down to move.`}
+                        title="Drag to reorder · Alt + ↑/↓"
+                        onDragStart={(e) => {
+                          setDragId(cat.id);
+                          e.dataTransfer.effectAllowed = 'move';
+                          e.dataTransfer.setData('text/plain', cat.id);
+                        }}
+                        onDragEnd={() => setDragId(null)}
+                        onKeyDown={(e) => {
+                          if (!e.altKey) return;
+                          if (e.key === 'ArrowUp') {
+                            e.preventDefault();
+                            void moveCategory(cat.id, -1);
+                          } else if (e.key === 'ArrowDown') {
+                            e.preventDefault();
+                            void moveCategory(cat.id, 1);
+                          }
+                        }}
+                      >
+                        <span className="text-xs leading-none tracking-tighter" aria-hidden>
+                          ⋮⋮
+                        </span>
+                      </button>
                       <span
                         className="h-8 w-8 shrink-0 rounded-lg"
                         style={{ backgroundColor: cat.color }}

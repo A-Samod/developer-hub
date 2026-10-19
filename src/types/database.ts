@@ -15,6 +15,7 @@ export type Database = {
           name: string;
           entity_type: CategoryEntityType;
           color: string;
+          position: number;
           created_at: string;
         };
         Insert: {
@@ -23,6 +24,7 @@ export type Database = {
           name: string;
           entity_type: CategoryEntityType;
           color?: string;
+          position?: number;
           created_at?: string;
         };
         Update: {
@@ -31,6 +33,7 @@ export type Database = {
           name?: string;
           entity_type?: CategoryEntityType;
           color?: string;
+          position?: number;
           created_at?: string;
         };
         Relationships: [];

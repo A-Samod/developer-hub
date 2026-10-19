@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import MarkdownEditor from '@/components/markdown/MarkdownEditor';
 import MarkdownPreview from '@/components/markdown/MarkdownPreview';
+import CategorySelect from '@/components/ui/CategorySelect';
 import ConfirmBanner from '@/components/ui/ConfirmBanner';
 import ResourceMultiSelect from '@/components/ui/ResourceMultiSelect';
 import RowOverflowMenu from '@/components/ui/RowOverflowMenu';
@@ -32,7 +33,6 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
   const hub = useHub();
   const router = useRouter();
   const existing = hub.getTask(taskId);
-  const categories = useMemo(() => hub.listCategories('task'), [hub]);
   const resources = useMemo(() => hub.listTaskResources(taskId), [hub, taskId]);
   const resourceOptions = useMemo(
     () => [
@@ -261,14 +261,10 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
         <div className="grid gap-4 md:grid-cols-4">
           <div>
             <label className="label">Category</label>
-            <SelectDropdown
-              aria-label="Category"
+            <CategorySelect
+              entityType="task"
               value={categoryId}
               onChange={setCategoryId}
-              options={[
-                { value: '', label: 'None' },
-                ...categories.map((c) => ({ value: c.id, label: c.name, color: c.color })),
-              ]}
             />
           </div>
           <div>
