@@ -3,10 +3,17 @@
 import { useRouter } from 'next/navigation';
 import { useMemo, useState } from 'react';
 import TaskRow from '@/components/tasks/TaskRow';
+import CategorySelect from '@/components/ui/CategorySelect';
 import ConfirmBanner from '@/components/ui/ConfirmBanner';
 import LoadMoreButton from '@/components/ui/LoadMoreButton';
 import MultiSelectDropdown from '@/components/ui/MultiSelectDropdown';
 import SelectDropdown from '@/components/ui/SelectDropdown';
+import {
+  groupTasksByCompletedDay,
+  matchesCompletedBucket,
+  sortByCompletedAtDesc,
+  type CompletedBucket,
+} from '@/lib/completedTasks';
 import {
   isDueToday,
   isOverdue,
@@ -32,7 +39,7 @@ type SortKey = 'due' | 'priority' | 'updated';
 export default function TasksPage() {
   const hub = useHub();
   const router = useRouter();
-  const categories = useMemo(() => hub.listCategories('task'), [hub]);
+  const categories = useMemo(() => hub.listCategories('task'), [hub, hub.state.categories]);
   const [view, setView] = useState<ViewKey>('all');
   const [query, setQuery] = useState('');
   const [categoryId, setCategoryId] = useState('');
@@ -40,6 +47,8 @@ export default function TasksPage() {
   const [priority, setPriority] = useState('');
   const [dueBucket, setDueBucket] = useState<DueBucket>('all');
   const [dueOn, setDueOn] = useState('');
+  const [completedBucket, setCompletedBucket] = useState<CompletedBucket>('all');
+  const [completedOn, setCompletedOn] = useState('');
   const [sort, setSort] = useState<SortKey>('due');
   const [showFilters, setShowFilters] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
@@ -51,7 +60,9 @@ export default function TasksPage() {
   const [newDue, setNewDue] = useState('');
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
-  const tasks = useMemo(() => {
+  const isCompletedView = view === 'completed';
+
+  const filteredBase = useMemo(() => {
     let items = [...hub.state.tasks];
     const q = query.trim().toLowerCase();
     if (q) {
@@ -60,37 +71,31 @@ export default function TasksPage() {
           t.title.toLowerCase().includes(q) || t.description.toLowerCase().includes(q),
       );
     }
+    if (categoryId) items = items.filter((t) => t.category_id === categoryId);
+    return items;
+  }, [hub.state.tasks, query, categoryId]);
+
+  const openTasks = useMemo(() => {
+    let items = filteredBase.filter((t) => t.status !== 'done' && t.status !== 'cancelled');
 
     switch (view) {
       case 'my_day':
-        items = items.filter(
-          (t) =>
-            t.status !== 'done' &&
-            t.status !== 'cancelled' &&
-            (isDueToday(t.due_date) || isOverdue(t.due_date)),
-        );
+        items = items.filter((t) => isDueToday(t.due_date) || isOverdue(t.due_date));
         break;
       case 'upcoming':
-        items = items.filter(
-          (t) => t.status !== 'done' && t.status !== 'cancelled' && isUpcoming(t.due_date),
-        );
+        items = items.filter((t) => isUpcoming(t.due_date));
         break;
       case 'in_progress':
-        items = items.filter((t) => t.status === 'in_progress');
+        items = filteredBase.filter((t) => t.status === 'in_progress');
         break;
       case 'completed':
-        items = items.filter((t) => t.status === 'done');
-        break;
+        return [];
       case 'by_category':
-        if (categoryId) items = items.filter((t) => t.category_id === categoryId);
         break;
       default:
         break;
     }
 
-    if (view !== 'by_category' && categoryId) {
-      items = items.filter((t) => t.category_id === categoryId);
-    }
     if (statuses.length > 0) {
       items = items.filter((t) => statuses.includes(t.status));
     }
@@ -98,8 +103,7 @@ export default function TasksPage() {
     if (dueOn) {
       items = items.filter((t) => t.due_date === dueOn);
     } else {
-      if (dueBucket === 'overdue')
-        items = items.filter((t) => isOverdue(t.due_date, t.status === 'done'));
+      if (dueBucket === 'overdue') items = items.filter((t) => isOverdue(t.due_date, false));
       if (dueBucket === 'today') items = items.filter((t) => isDueToday(t.due_date));
       if (dueBucket === 'upcoming') items = items.filter((t) => isUpcoming(t.due_date));
       if (dueBucket === 'none') items = items.filter((t) => !t.due_date);
@@ -111,8 +115,8 @@ export default function TasksPage() {
         const pr = priorityRank(a.priority) - priorityRank(b.priority);
         if (pr !== 0) return pr;
       }
-      const aOver = isOverdue(a.due_date, a.status === 'done') ? 0 : 1;
-      const bOver = isOverdue(b.due_date, b.status === 'done') ? 0 : 1;
+      const aOver = isOverdue(a.due_date, false) ? 0 : 1;
+      const bOver = isOverdue(b.due_date, false) ? 0 : 1;
       if (aOver !== bOver) return aOver - bOver;
       const ad = a.due_date ?? '9999-99-99';
       const bd = b.due_date ?? '9999-99-99';
@@ -120,28 +124,14 @@ export default function TasksPage() {
     });
 
     return items;
-  }, [hub.state.tasks, view, query, categoryId, statuses, priority, dueBucket, dueOn, sort]);
+  }, [filteredBase, view, statuses, priority, dueBucket, dueOn, sort]);
 
-  const panelFiltersActive =
-    Boolean(categoryId) ||
-    statuses.length > 0 ||
-    Boolean(priority) ||
-    dueBucket !== 'all' ||
-    Boolean(dueOn);
-  const filtersActive = Boolean(query.trim()) || panelFiltersActive;
-  const panelFilterCount =
-    Number(Boolean(categoryId)) +
-    Number(statuses.length > 0) +
-    Number(Boolean(priority)) +
-    Number(dueBucket !== 'all' || Boolean(dueOn));
+  const completedTasks = useMemo(() => {
+    let items = filteredBase.filter((t) => t.status === 'done');
+    items = items.filter((t) => matchesCompletedBucket(t, completedBucket, completedOn));
+    return sortByCompletedAtDesc(items);
+  }, [filteredBase, completedBucket, completedOn]);
 
-  const useFlatList = view !== 'all' || statuses.length > 0;
-
-  const openTasks = useMemo(
-    () => tasks.filter((t) => t.status !== 'done' && t.status !== 'cancelled'),
-    [tasks],
-  );
-  const completedTasks = useMemo(() => tasks.filter((t) => t.status === 'done'), [tasks]);
   const {
     visibleItems: visibleCompleted,
     hasMore: completedHasMore,
@@ -149,7 +139,41 @@ export default function TasksPage() {
     loadMore: loadMoreCompleted,
     total: completedTotal,
     visibleCount: completedVisibleCount,
-  } = useLoadMore(completedTasks, `${view}|completed|${statuses.join(',')}`, 3);
+  } = useLoadMore(
+    completedTasks,
+    `${view}|completed|${query}|${categoryId}|${completedBucket}|${completedOn}`,
+    isCompletedView ? 12 : 6,
+  );
+
+  const completedGroups = useMemo(
+    () => groupTasksByCompletedDay(visibleCompleted),
+    [visibleCompleted],
+  );
+
+  const openPanelFiltersActive =
+    statuses.length > 0 ||
+    Boolean(priority) ||
+    dueBucket !== 'all' ||
+    Boolean(dueOn);
+  const completedPanelFiltersActive =
+    completedBucket !== 'all' || Boolean(completedOn);
+  const panelFiltersActive =
+    Boolean(categoryId) ||
+    (isCompletedView ? completedPanelFiltersActive : openPanelFiltersActive);
+  const filtersActive = Boolean(query.trim()) || panelFiltersActive;
+  const panelFilterCount = isCompletedView
+    ? Number(Boolean(categoryId)) +
+      Number(completedBucket !== 'all' || Boolean(completedOn))
+    : Number(Boolean(categoryId)) +
+      Number(statuses.length > 0) +
+      Number(Boolean(priority)) +
+      Number(dueBucket !== 'all' || Boolean(dueOn));
+
+  const showOpenList = view !== 'completed';
+  const showCompletedBlock = view === 'all' || view === 'completed';
+  const emptyPage =
+    (showOpenList ? openTasks.length === 0 : true) &&
+    (showCompletedBlock ? completedTasks.length === 0 : true);
 
   function clearFilters() {
     setQuery('');
@@ -158,6 +182,8 @@ export default function TasksPage() {
     setPriority('');
     setDueBucket('all');
     setDueOn('');
+    setCompletedBucket('all');
+    setCompletedOn('');
   }
 
   async function create() {
@@ -165,7 +191,7 @@ export default function TasksPage() {
     const task = await hub.createTask({
       title: newTitle.trim(),
       description: '',
-      category_id: newCategory || categories[0]?.id || null,
+      category_id: newCategory || null,
       status: newStatus,
       priority: newPriority,
       due_date: newDue || null,
@@ -237,6 +263,7 @@ export default function TasksPage() {
     { key: 'upcoming', label: 'Upcoming' },
     { key: 'in_progress', label: 'In progress' },
     { key: 'all', label: 'All' },
+    { key: 'completed', label: 'Completed' },
     { key: 'by_category', label: 'By category' },
   ];
 
@@ -256,6 +283,38 @@ export default function TasksPage() {
         />
       );
     });
+  }
+
+  function renderCompletedGrouped() {
+    if (completedTasks.length === 0) {
+      return (
+        <div className="px-4 py-6 text-sm text-[var(--color-muted)]">No completed tasks.</div>
+      );
+    }
+    return (
+      <>
+        {completedGroups.map((group) => (
+          <div key={group.key}>
+            <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)]/60 px-4 py-2">
+              <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
+                {group.label} · {group.tasks.length}
+              </h3>
+            </div>
+            <ul className="divide-y divide-[var(--color-border)]">{renderRows(group.tasks)}</ul>
+          </div>
+        ))}
+        <div className="border-t border-[var(--color-border)] px-4 py-3">
+          <LoadMoreButton
+            hasMore={completedHasMore}
+            remaining={completedRemaining}
+            total={completedTotal}
+            visibleCount={completedVisibleCount}
+            onLoadMore={loadMoreCompleted}
+            itemLabel="completed"
+          />
+        </div>
+      </>
+    );
   }
 
   if (hub.loading) {
@@ -289,15 +348,10 @@ export default function TasksPage() {
             onChange={(e) => setNewTitle(e.target.value)}
           />
           <div className="grid gap-3 md:grid-cols-4">
-            <SelectDropdown
-              aria-label="Category"
-              value={newCategory || categories[0]?.id || ''}
+            <CategorySelect
+              entityType="task"
+              value={newCategory}
               onChange={setNewCategory}
-              options={categories.map((c) => ({
-                value: c.id,
-                label: c.name,
-                color: c.color,
-              }))}
             />
             <SelectDropdown
               aria-label="Status"
@@ -342,7 +396,10 @@ export default function TasksPage() {
             key={v.key}
             type="button"
             className={`shrink-0 ${view === v.key ? 'btn-primary' : 'btn-secondary'}`}
-            onClick={() => setView(v.key)}
+            onClick={() => {
+              setView(v.key);
+              if (v.key === 'completed') setShowCompleted(true);
+            }}
           >
             {v.label}
           </button>
@@ -385,16 +442,18 @@ export default function TasksPage() {
             Clear filters
           </button>
         )}
-        <SelectDropdown
-          aria-label="Sort"
-          value={sort}
-          onChange={(v) => setSort(v as SortKey)}
-          options={[
-            { value: 'due', label: 'Sort: Due date' },
-            { value: 'priority', label: 'Sort: Priority' },
-            { value: 'updated', label: 'Sort: Updated' },
-          ]}
-        />
+        {!isCompletedView && (
+          <SelectDropdown
+            aria-label="Sort"
+            value={sort}
+            onChange={(v) => setSort(v as SortKey)}
+            options={[
+              { value: 'due', label: 'Sort: Due date' },
+              { value: 'priority', label: 'Sort: Priority' },
+              { value: 'updated', label: 'Sort: Updated' },
+            ]}
+          />
+        )}
       </div>
 
       {showFilters && (
@@ -408,65 +467,113 @@ export default function TasksPage() {
               ...categories.map((c) => ({ value: c.id, label: c.name, color: c.color })),
             ]}
           />
-          <MultiSelectDropdown
-            aria-label="Status"
-            values={statuses}
-            onChange={setStatuses}
-            placeholder="All statuses"
-            options={TASK_STATUSES.map((s) => ({
-              value: s,
-              label: formatTaskStatus(s),
-            }))}
-          />
-          <SelectDropdown
-            aria-label="Priority"
-            value={priority}
-            onChange={setPriority}
-            options={[
-              { value: '', label: 'All priorities' },
-              ...PRIORITIES.map((p) => ({ value: p, label: formatPriority(p) })),
-            ]}
-          />
-          <SelectDropdown
-            aria-label="Due date"
-            value={dueOn ? 'exact' : dueBucket}
-            onChange={(v) => {
-              if (v === 'exact') return;
-              setDueOn('');
-              setDueBucket(v as DueBucket);
-            }}
-            options={[
-              { value: 'all', label: 'Any due date' },
-              { value: 'overdue', label: 'Overdue' },
-              { value: 'today', label: 'Today' },
-              { value: 'upcoming', label: 'Upcoming' },
-              { value: 'none', label: 'No due date' },
-              ...(dueOn ? [{ value: 'exact', label: `On ${dueOn}` }] : []),
-            ]}
-          />
-          <div className="flex w-full items-center gap-2 sm:w-auto">
-            <input
-              type="date"
-              className="input flex-1 sm:flex-none"
-              aria-label="Due on date"
-              value={dueOn}
-              onChange={(e) => {
-                const value = e.target.value;
-                setDueOn(value);
-                if (value) setDueBucket('all');
-              }}
-            />
-            {dueOn && (
-              <button
-                type="button"
-                className="btn-secondary shrink-0"
-                aria-label="Clear due date"
-                onClick={() => setDueOn('')}
-              >
-                ✕
-              </button>
-            )}
-          </div>
+          {isCompletedView ? (
+            <>
+              <SelectDropdown
+                aria-label="Completed when"
+                value={completedOn ? 'exact' : completedBucket}
+                onChange={(v) => {
+                  if (v === 'exact') return;
+                  setCompletedOn('');
+                  setCompletedBucket(v as CompletedBucket);
+                }}
+                options={[
+                  { value: 'all', label: 'Any completion date' },
+                  { value: 'today', label: 'Completed today' },
+                  { value: 'yesterday', label: 'Completed yesterday' },
+                  { value: 'week', label: 'Completed this week' },
+                  ...(completedOn
+                    ? [{ value: 'exact', label: `On ${completedOn}` }]
+                    : []),
+                ]}
+              />
+              <div className="flex w-full items-center gap-2 sm:w-auto">
+                <input
+                  type="date"
+                  className="input flex-1 sm:flex-none"
+                  aria-label="Completed on date"
+                  value={completedOn}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setCompletedOn(value);
+                    if (value) setCompletedBucket('all');
+                  }}
+                />
+                {completedOn && (
+                  <button
+                    type="button"
+                    className="btn-secondary shrink-0"
+                    aria-label="Clear completed date"
+                    onClick={() => setCompletedOn('')}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            <>
+              <MultiSelectDropdown
+                aria-label="Status"
+                values={statuses}
+                onChange={setStatuses}
+                placeholder="All statuses"
+                options={TASK_STATUSES.map((s) => ({
+                  value: s,
+                  label: formatTaskStatus(s),
+                }))}
+              />
+              <SelectDropdown
+                aria-label="Priority"
+                value={priority}
+                onChange={setPriority}
+                options={[
+                  { value: '', label: 'All priorities' },
+                  ...PRIORITIES.map((p) => ({ value: p, label: formatPriority(p) })),
+                ]}
+              />
+              <SelectDropdown
+                aria-label="Due date"
+                value={dueOn ? 'exact' : dueBucket}
+                onChange={(v) => {
+                  if (v === 'exact') return;
+                  setDueOn('');
+                  setDueBucket(v as DueBucket);
+                }}
+                options={[
+                  { value: 'all', label: 'Any due date' },
+                  { value: 'overdue', label: 'Overdue' },
+                  { value: 'today', label: 'Today' },
+                  { value: 'upcoming', label: 'Upcoming' },
+                  { value: 'none', label: 'No due date' },
+                  ...(dueOn ? [{ value: 'exact', label: `On ${dueOn}` }] : []),
+                ]}
+              />
+              <div className="flex w-full items-center gap-2 sm:w-auto">
+                <input
+                  type="date"
+                  className="input flex-1 sm:flex-none"
+                  aria-label="Due on date"
+                  value={dueOn}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setDueOn(value);
+                    if (value) setDueBucket('all');
+                  }}
+                />
+                {dueOn && (
+                  <button
+                    type="button"
+                    className="btn-secondary shrink-0"
+                    aria-label="Clear due date"
+                    onClick={() => setDueOn('')}
+                  >
+                    ✕
+                  </button>
+                )}
+              </div>
+            </>
+          )}
           {filtersActive && (
             <button type="button" className="btn-secondary" onClick={clearFilters}>
               Clear filters
@@ -486,68 +593,70 @@ export default function TasksPage() {
         />
       )}
 
-      {tasks.length === 0 ? (
+      {emptyPage ? (
         <div className="panel px-5 py-10 text-center text-sm text-[var(--color-muted)]">
           No tasks match.
         </div>
-      ) : useFlatList ? (
-        <ul className="panel divide-y divide-[var(--color-border)]">{renderRows(tasks)}</ul>
       ) : (
         <>
-          <div className="mb-2">
-            <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
-              Open · {openTasks.length}
-            </h2>
-          </div>
-          {openTasks.length === 0 ? (
-            <div className="panel mb-4 px-4 py-6 text-sm text-[var(--color-muted)]">
-              No open tasks.
-            </div>
-          ) : (
+          {showOpenList && view !== 'all' && (
             <ul className="panel mb-4 divide-y divide-[var(--color-border)]">
-              {renderRows(openTasks)}
+              {openTasks.length === 0 ? (
+                <li className="px-4 py-6 text-sm text-[var(--color-muted)]">No open tasks.</li>
+              ) : (
+                renderRows(openTasks)
+              )}
             </ul>
           )}
 
-          <div className="panel overflow-hidden">
-            <div className="flex items-center justify-between gap-3 px-4 py-3">
-              <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
-                Completed · {completedTasks.length}
-              </h2>
-              <button
-                type="button"
-                className="btn-secondary min-h-8 px-3 py-1.5 text-xs"
-                onClick={() => setShowCompleted((v) => !v)}
-              >
-                {showCompleted ? 'Hide' : 'Show'}
-              </button>
-            </div>
-            {showCompleted && (
-              <>
-                <ul className="divide-y divide-[var(--color-border)] border-t border-[var(--color-border)]">
-                  {completedTasks.length === 0 ? (
-                    <li className="px-4 py-6 text-sm text-[var(--color-muted)]">
-                      No completed tasks.
-                    </li>
-                  ) : (
-                    renderRows(visibleCompleted)
-                  )}
+          {view === 'all' && (
+            <>
+              <div className="mb-2">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
+                  Open · {openTasks.length}
+                </h2>
+              </div>
+              {openTasks.length === 0 ? (
+                <div className="panel mb-4 px-4 py-6 text-sm text-[var(--color-muted)]">
+                  No open tasks.
+                </div>
+              ) : (
+                <ul className="panel mb-4 divide-y divide-[var(--color-border)]">
+                  {renderRows(openTasks)}
                 </ul>
-                {completedTasks.length > 0 && (
-                  <div className="border-t border-[var(--color-border)] px-4 py-3">
-                    <LoadMoreButton
-                      hasMore={completedHasMore}
-                      remaining={completedRemaining}
-                      total={completedTotal}
-                      visibleCount={completedVisibleCount}
-                      onLoadMore={loadMoreCompleted}
-                      itemLabel="completed"
-                    />
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+              )}
+
+              <div className="panel overflow-hidden">
+                <div className="flex items-center justify-between gap-3 px-4 py-3">
+                  <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
+                    Completed · {completedTasks.length}
+                  </h2>
+                  <button
+                    type="button"
+                    className="btn-secondary min-h-8 px-3 py-1.5 text-xs"
+                    onClick={() => setShowCompleted((v) => !v)}
+                  >
+                    {showCompleted ? 'Hide' : 'Show'}
+                  </button>
+                </div>
+                {showCompleted && renderCompletedGrouped()}
+              </div>
+            </>
+          )}
+
+          {isCompletedView && (
+            <div className="panel overflow-hidden">
+              <div className="px-4 py-3">
+                <h2 className="text-xs font-semibold uppercase tracking-wide text-[var(--color-muted)]">
+                  Completed · {completedTasks.length}
+                </h2>
+                <p className="mt-1 text-xs text-[var(--color-muted)]">
+                  Newest first · grouped by completion day
+                </p>
+              </div>
+              {renderCompletedGrouped()}
+            </div>
+          )}
         </>
       )}
     </div>

@@ -66,7 +66,7 @@ export default function TaskRow({
   return (
     <li
       className={`flex items-start gap-3 px-4 py-3 hover:bg-[var(--color-surface)] ${
-        done ? 'opacity-55' : ''
+        done ? 'bg-[var(--color-success-soft)]/40' : ''
       }`}
     >
       <input
@@ -83,6 +83,11 @@ export default function TaskRow({
           </div>
         </Link>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+          {done && (
+            <span className="rounded-full bg-[var(--color-success-soft)] px-2 py-0.5 text-xs font-medium text-[var(--color-success)]">
+              Done
+            </span>
+          )}
           {category && (
             <span
               className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
@@ -94,7 +99,7 @@ export default function TaskRow({
               {category.name}
             </span>
           )}
-          <PriorityBadge priority={task.priority} />
+          {!done && <PriorityBadge priority={task.priority} />}
           {!done && <StatusBadge status={task.status} />}
         </div>
       </div>

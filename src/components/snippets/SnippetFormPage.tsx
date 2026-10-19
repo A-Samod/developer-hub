@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect, useMemo, useState } from 'react';
 import CodeEditor from '@/components/snippets/CodeEditor';
 import CopyCodeButton from '@/components/snippets/CopyCodeButton';
+import CategorySelect from '@/components/ui/CategorySelect';
 import ConfirmBanner from '@/components/ui/ConfirmBanner';
 import RowOverflowMenu from '@/components/ui/RowOverflowMenu';
 import SelectDropdown from '@/components/ui/SelectDropdown';
@@ -18,10 +19,6 @@ export default function SnippetFormPage({ snippetId }: { snippetId?: string }) {
   const hub = useHub();
   const router = useRouter();
   const existing = snippetId ? hub.getSnippet(snippetId) : undefined;
-  const categories = useMemo(
-    () => hub.state.categories.filter((c) => c.entity_type === 'snippet'),
-    [hub.state.categories],
-  );
   const tagSuggestions = useMemo(() => {
     const set = new Set<string>();
     for (const s of hub.state.snippets) for (const t of s.tags) set.add(t);
@@ -279,14 +276,10 @@ export default function SnippetFormPage({ snippetId }: { snippetId?: string }) {
         <div className="grid gap-4 md:grid-cols-[1fr_1fr_auto]">
           <div>
             <label className="label">Category</label>
-            <SelectDropdown
-              aria-label="Category"
+            <CategorySelect
+              entityType="snippet"
               value={categoryId}
               onChange={markDirty(setCategoryId)}
-              options={[
-                { value: '', label: 'None' },
-                ...categories.map((c) => ({ value: c.id, label: c.name, color: c.color })),
-              ]}
             />
             <p className="mt-1.5 text-xs text-[var(--color-muted)]">
               Use topics like Git or Docker. Language is set separately.

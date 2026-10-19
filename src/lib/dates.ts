@@ -7,12 +7,34 @@ export function nowIso(): string {
 
 /** Today's calendar date in Sri Lanka as YYYY-MM-DD. */
 export function todayDate(): string {
+  return calendarDateInAppTz(nowIso());
+}
+
+/** Calendar date YYYY-MM-DD in Sri Lanka for an ISO timestamp or date. */
+export function calendarDateInAppTz(isoOrDate: string | null | undefined): string {
+  if (!isoOrDate) {
+    return new Intl.DateTimeFormat('en-CA', {
+      timeZone: APP_TIMEZONE,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(new Date());
+  }
+  if (isoOrDate.length === 10) return isoOrDate;
   return new Intl.DateTimeFormat('en-CA', {
     timeZone: APP_TIMEZONE,
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
-  }).format(new Date());
+  }).format(new Date(isoOrDate));
+}
+
+/** Label for a completion day: Today / Yesterday / formatted date. */
+export function completedDayLabel(day: string): string {
+  const today = todayDate();
+  if (day === today) return 'Today';
+  if (day === addDays(today, -1)) return 'Yesterday';
+  return formatDate(day);
 }
 
 export function addDays(dateStr: string, days: number): string {

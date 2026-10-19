@@ -17,10 +17,7 @@ type SortKey = 'updated' | 'title';
 
 export default function NotesPage() {
   const hub = useHub();
-  const categories = useMemo(
-    () => hub.state.categories.filter((c) => c.entity_type === 'note'),
-    [hub.state.categories],
-  );
+  const categories = useMemo(() => hub.listCategories('note'), [hub, hub.state.categories]);
   const [query, setQuery] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [favoritesOnly, setFavoritesOnly] = useState(false);
