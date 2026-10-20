@@ -13,7 +13,7 @@ import { createClient } from '@/lib/supabase/client';
 import { toastError, toastSuccess } from '@/lib/toast';
 import type { CategoryEntityType } from '@/types/models';
 
-const entityTypes: CategoryEntityType[] = ['note', 'snippet', 'task'];
+const entityTypes: CategoryEntityType[] = ['task', 'note', 'snippet'];
 const entityLabels: Record<CategoryEntityType, string> = {
   note: 'Notes',
   snippet: 'Snippets',
@@ -31,7 +31,7 @@ export default function SettingsPage() {
   const searchParams = useSearchParams();
   const fileRef = useRef<HTMLInputElement>(null);
   const [entityType, setEntityType] = useState<CategoryEntityType>(
-    () => parseEntityType(searchParams.get('type')) ?? 'note',
+    () => parseEntityType(searchParams.get('type')) ?? 'task',
   );
   const [name, setName] = useState('');
   const [color, setColor] = useState<string>(DEFAULT_CATEGORY_COLOR);
@@ -257,17 +257,23 @@ export default function SettingsPage() {
           ))}
         </div>
 
-        <form onSubmit={addCategory} className="panel mb-4 flex flex-col gap-3 p-4 sm:flex-row sm:flex-wrap sm:items-center">
-          <input
-            className="input max-w-xs flex-1"
-            placeholder={`New ${entityType} category`}
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-          <ColorSwatchPicker value={color} onChange={setColor} />
-          <button type="submit" className="btn-primary">
-            Add
-          </button>
+        <form onSubmit={addCategory} className="panel mb-4 flex flex-col gap-3 p-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <input
+              className="input max-w-xs flex-1"
+              placeholder={`New ${entityType} category`}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+            <ColorSwatchPicker value={color} onChange={setColor} />
+            <button type="submit" className="btn-primary">
+              Add
+            </button>
+          </div>
+          <p className="text-xs text-[var(--color-muted)]">
+            Palette avoids status colors (overdue red, due-today amber, in-progress blue) so
+            categories stay distinct from urgency.
+          </p>
         </form>
 
         <p className="mb-2 text-xs text-[var(--color-muted)]">

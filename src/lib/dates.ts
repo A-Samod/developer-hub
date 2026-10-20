@@ -37,6 +37,14 @@ export function completedDayLabel(day: string): string {
   return formatDate(day);
 }
 
+/**
+ * Convert a YYYY-MM-DD calendar date to an ISO timestamp at noon Asia/Colombo
+ * so the completion day stays stable when grouping/filtering.
+ */
+export function dateToCompletedAtIso(dateStr: string): string {
+  return new Date(`${dateStr}T12:00:00+05:30`).toISOString();
+}
+
 export function addDays(dateStr: string, days: number): string {
   const [y, m, d] = dateStr.split('-').map(Number);
   const utc = new Date(Date.UTC(y, m - 1, d + days));

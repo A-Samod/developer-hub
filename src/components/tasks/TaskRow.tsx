@@ -2,6 +2,7 @@
 
 import Link from 'next/link';
 import { PriorityBadge, StatusBadge } from '@/components/tasks/StatusBadge';
+import CategoryChip from '@/components/ui/CategoryChip';
 import RowOverflowMenu from '@/components/ui/RowOverflowMenu';
 import { formatDate, isDueToday, isOverdue } from '@/lib/dates';
 import type { Category, Task } from '@/types/models';
@@ -62,12 +63,14 @@ export default function TaskRow({
 }: Props) {
   const done = task.status === 'done';
   const inMyDay = !done && (isDueToday(task.due_date) || isOverdue(task.due_date));
+  const showRail = Boolean(category && !done);
+  const showPriority = !done && task.priority !== 'medium';
+  const showStatus = !done && task.status !== 'todo';
 
   return (
     <li
-      className={`flex items-start gap-3 px-4 py-3 hover:bg-[var(--color-surface)] ${
-        done ? 'bg-[var(--color-success-soft)]/40' : ''
-      }`}
+      className="flex items-start gap-3 border-l-[3px] py-3 pl-3.5 pr-4 hover:bg-[var(--color-surface)]"
+      style={{ borderLeftColor: showRail ? category!.color : 'transparent' }}
     >
       <input
         type="checkbox"
@@ -83,24 +86,16 @@ export default function TaskRow({
           </div>
         </Link>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          {done && (
-            <span className="rounded-full bg-[var(--color-success-soft)] px-2 py-0.5 text-xs font-medium text-[var(--color-success)]">
-              Done
-            </span>
-          )}
-          {category && (
-            <span
-              className="inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium"
-              style={{
-                backgroundColor: `${category.color}22`,
-                color: category.color,
-              }}
-            >
-              {category.name}
-            </span>
-          )}
-          {!done && <PriorityBadge priority={task.priority} />}
-          {!done && <StatusBadge status={task.status} />}
+          {category && <CategoryChip name={category.name} color={category.color} />}
+          {showPriority &&
+            (task.priority === 'high' ? (
+              <span className="inline-flex items-center gap-0.5 text-xs font-medium text-[var(--color-warning)]">
+                ⚑ High
+              </span>
+            ) : (
+              <PriorityBadge priority={task.priority} />
+            ))}
+          {showStatus && <StatusBadge status={task.status} />}
         </div>
       </div>
       <div className="flex shrink-0 items-center gap-1.5">

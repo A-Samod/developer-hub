@@ -10,7 +10,14 @@ import ConfirmBanner from '@/components/ui/ConfirmBanner';
 import ResourceMultiSelect from '@/components/ui/ResourceMultiSelect';
 import RowOverflowMenu from '@/components/ui/RowOverflowMenu';
 import SelectDropdown from '@/components/ui/SelectDropdown';
-import { addDays, formatDateTime, todayDate, tomorrowDate } from '@/lib/dates';
+import {
+  addDays,
+  calendarDateInAppTz,
+  dateToCompletedAtIso,
+  formatDateTime,
+  todayDate,
+  tomorrowDate,
+} from '@/lib/dates';
 import { useHub } from '@/lib/hub/HubProvider';
 import {
   newSubtaskId,
@@ -62,6 +69,9 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
   const [status, setStatus] = useState<TaskStatus>(existing?.status ?? 'todo');
   const [priority, setPriority] = useState<Priority>(existing?.priority ?? 'medium');
   const [dueDate, setDueDate] = useState(existing?.due_date ?? '');
+  const [completedOn, setCompletedOn] = useState(
+    existing?.completed_at ? calendarDateInAppTz(existing.completed_at) : '',
+  );
   const [selectedResources, setSelectedResources] = useState<string[]>([]);
   const [descMode, setDescMode] = useState<DescMode>('edit');
   const [savedMsg, setSavedMsg] = useState('');
@@ -79,7 +89,18 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
     setStatus(existing.status);
     setPriority(existing.priority);
     setDueDate(existing.due_date ?? '');
+    setCompletedOn(
+      existing.completed_at ? calendarDateInAppTz(existing.completed_at) : '',
+    );
   }, [existing?.id]);
+
+  // Keep completed-on in sync when hub updates completed_at (e.g. after save).
+  useEffect(() => {
+    if (!existing || status !== 'done') return;
+    if (existing.completed_at) {
+      setCompletedOn(calendarDateInAppTz(existing.completed_at));
+    }
+  }, [existing?.completed_at, existing, status]);
 
   useEffect(() => {
     setSelectedResources(resources.map((r) => `${r.resource_type}:${r.resource_id}`));
@@ -105,6 +126,7 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
   async function persist(patch?: {
     status?: TaskStatus;
     due_date?: string | null;
+    completed_on?: string;
   }) {
     if (!title.trim()) {
       setFormError('Title is required');
@@ -114,6 +136,12 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
     setSaving(true);
     try {
       const nextStatus = patch?.status ?? status;
+      const nextCompletedOn =
+        patch?.completed_on ??
+        (nextStatus === 'done' ? completedOn || todayDate() : '');
+      const completed_at =
+        nextStatus === 'done' ? dateToCompletedAtIso(nextCompletedOn) : null;
+
       await hub.updateTask(taskId, {
         title: title.trim(),
         description: serializeTaskDescription(description, subtasks),
@@ -121,7 +149,7 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
         status: nextStatus,
         priority,
         due_date: patch?.due_date !== undefined ? patch.due_date : dueDate || null,
-        completed_at: nextStatus === 'done' ? new Date().toISOString() : null,
+        completed_at,
       });
       await hub.setTaskResources(
         taskId,
@@ -132,6 +160,8 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
       );
       if (patch?.status) setStatus(patch.status);
       if (patch?.due_date !== undefined) setDueDate(patch.due_date ?? '');
+      if (nextStatus === 'done') setCompletedOn(nextCompletedOn);
+      else setCompletedOn('');
       setSavedMsg('Saved');
       toastSuccess('Saved');
       return true;
@@ -148,7 +178,15 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
   }
 
   async function markDone() {
-    await persist({ status: 'done' });
+    const day = completedOn || todayDate();
+    setCompletedOn(day);
+    await persist({ status: 'done', completed_on: day });
+  }
+
+  function onStatusChange(next: TaskStatus) {
+    setStatus(next);
+    if (next === 'done' && !completedOn) setCompletedOn(todayDate());
+    if (next !== 'done') setCompletedOn('');
   }
 
   async function removeConfirmed() {
@@ -272,7 +310,7 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
             <SelectDropdown
               aria-label="Status"
               value={status}
-              onChange={(v) => setStatus(v as TaskStatus)}
+              onChange={(v) => onStatusChange(v as TaskStatus)}
               options={TASK_STATUSES.map((s) => ({
                 value: s,
                 label: formatTaskStatus(s),
@@ -321,6 +359,40 @@ export default function TaskDetailPage({ taskId }: { taskId: string }) {
             </div>
           </div>
         </div>
+
+        {isDone && (
+          <div className="max-w-sm">
+            <label className="label">Completed on</label>
+            <input
+              type="date"
+              className="input"
+              value={completedOn || todayDate()}
+              onChange={(e) => setCompletedOn(e.target.value)}
+            />
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {[
+                { label: 'Today', value: todayDate() },
+                { label: 'Yesterday', value: addDays(todayDate(), -1) },
+              ].map((opt) => (
+                <button
+                  key={opt.label}
+                  type="button"
+                  className={`rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+                    completedOn === opt.value
+                      ? 'border-[var(--color-accent)] bg-[var(--color-accent-soft)] text-[var(--color-accent)]'
+                      : 'border-[var(--color-border)] text-[var(--color-muted)] hover:text-[var(--color-ink)]'
+                  }`}
+                  onClick={() => setCompletedOn(opt.value)}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <p className="mt-1.5 text-xs text-[var(--color-muted)]">
+              Used for Completed day groups. Change this if you marked done late.
+            </p>
+          </div>
+        )}
 
         <div>
           <div className="mb-2 flex flex-wrap items-center justify-between gap-2">

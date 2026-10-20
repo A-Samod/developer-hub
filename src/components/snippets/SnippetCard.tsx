@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import CodeBlock from '@/components/markdown/CodeBlock';
 import CopyCodeButton from '@/components/snippets/CopyCodeButton';
+import CategoryChip from '@/components/ui/CategoryChip';
 import RowOverflowMenu from '@/components/ui/RowOverflowMenu';
 import { codePreviewLines } from '@/lib/textPreview';
 import type { Category, Snippet } from '@/types/models';
@@ -66,17 +67,8 @@ export default function SnippetCard({
 
       <div className="mt-2 flex flex-wrap gap-1.5 px-4">
         <span className="chip">{languageLabel}</span>
-        {showCategory && (
-          <span
-            className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-chip)] px-2 py-0.5 text-xs font-medium text-[var(--color-chip-text)]"
-          >
-            <span
-              className="h-1.5 w-1.5 shrink-0 rounded-full"
-              style={{ backgroundColor: category.color }}
-              aria-hidden
-            />
-            {category.name}
-          </span>
+        {showCategory && category && (
+          <CategoryChip name={category.name} color={category.color} />
         )}
         {snippet.tags.slice(0, 3).map((t) => (
           <span key={t} className="chip">

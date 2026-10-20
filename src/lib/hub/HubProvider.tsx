@@ -443,7 +443,8 @@ export function HubProvider({ children }: { children: ReactNode }) {
         let completed_at =
           patch.completed_at !== undefined ? patch.completed_at : prev.completed_at;
         if (nextStatus === 'done' && prev.status !== 'done') {
-          completed_at = nowIso();
+          // Auto-stamp only when caller didn't choose a completion time.
+          if (patch.completed_at === undefined) completed_at = nowIso();
         } else if (nextStatus !== 'done') {
           completed_at = null;
         }

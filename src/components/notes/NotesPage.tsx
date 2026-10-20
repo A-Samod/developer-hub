@@ -7,6 +7,7 @@ import ConfirmBanner from '@/components/ui/ConfirmBanner';
 import LoadMoreButton from '@/components/ui/LoadMoreButton';
 import RowOverflowMenu from '@/components/ui/RowOverflowMenu';
 import SelectDropdown from '@/components/ui/SelectDropdown';
+import CategoryChip from '@/components/ui/CategoryChip';
 import { formatRelativeTime } from '@/lib/dates';
 import { useHub } from '@/lib/hub/HubProvider';
 import { stripMarkdownPreview } from '@/lib/textPreview';
@@ -175,16 +176,7 @@ export default function NotesPage() {
                     ) : null}
                     {(cat || note.tags.length > 0) && (
                       <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-                        {cat && (
-                          <span className="inline-flex items-center gap-1.5 rounded-full bg-[var(--color-chip)] px-2 py-0.5 text-xs font-medium text-[var(--color-chip-text)]">
-                            <span
-                              className="h-1.5 w-1.5 shrink-0 rounded-full"
-                              style={{ backgroundColor: cat.color }}
-                              aria-hidden
-                            />
-                            {cat.name}
-                          </span>
-                        )}
+                        {cat && <CategoryChip name={cat.name} color={cat.color} />}
                         {note.tags.slice(0, 3).map((t) => (
                           <TagChip key={t} tag={t} />
                         ))}
