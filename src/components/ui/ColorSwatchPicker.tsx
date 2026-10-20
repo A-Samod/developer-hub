@@ -51,7 +51,7 @@ export default function ColorSwatchPicker({ value, onChange, size = 'md' }: Prop
           style={{
             background: customSelected
               ? value
-              : 'conic-gradient(from 180deg, #e67e22, #f1c40f, #2ecc71, #3498db, #9b59b6, #6366f1, #e67e22)',
+              : 'conic-gradient(from 180deg, #f97316, #ec4899, #8b5cf6, #0ea5e9, #14b8a6, #84cc16, #f97316)',
           }}
           aria-hidden
         />
@@ -70,7 +70,7 @@ export default function ColorSwatchPicker({ value, onChange, size = 'md' }: Prop
         <input
           type="color"
           className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-          value={/^#[0-9A-Fa-f]{6}$/.test(value) ? value : '#3498db'}
+          value={/^#[0-9A-Fa-f]{6}$/.test(value) ? value : '#0ea5e9'}
           onChange={(e) => onChange(e.target.value)}
         />
       </label>
